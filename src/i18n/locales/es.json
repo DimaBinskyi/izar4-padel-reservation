@@ -8,5 +8,31 @@
     "dayBlocked": "Día bloqueado. Reserva no disponible.",
     "viewOnlyBeyondHorizon": "Fuera del plazo de reserva — solo consulta"
   },
-  "status": { "libre": "Libre", "ocupado": "Ocupado", "bloqueado": "Bloqueado", "pasado": "Pasado", "pronto": "Pronto", "mine": "Mía" }
+  "status": { "libre": "Libre", "ocupado": "Ocupado", "bloqueado": "Bloqueado", "pasado": "Pasado", "pronto": "Pronto", "mine": "Mía" },
+  "common": { "save": "Guardar", "cancel": "Cancelar", "back": "Volver", "confirm": "Confirmar", "edit": "Editar" },
+  "profile": {
+    "fillTitle": "Completa tu perfil",
+    "fillSubtitle": "Una vez — y reservar es un toque. Solo te lo pediremos otra vez si se pierden los datos.",
+    "editTitle": "Editar perfil",
+    "name": "Nombre", "apartment": "Vivienda", "cancelCode": "Código de cancelación",
+    "apartmentSearch": "Buscar… ej. P3-7", "codeHint": "🔑 Lo necesitarás para cancelar.",
+    "namePlaceholder": "Tu nombre", "codePlaceholder": "ej. sol24",
+    "pickFromList": "Elige una vivienda de la lista."
+  },
+  "booking": {
+    "title": "Confirmar reserva",
+    "resource": "Recurso", "date": "Fecha", "slot": "Turno",
+    "bookingAs": "Reservo como", "afterWeekly": "Tras reservar: {{n}}/{{limit}} esta semana",
+    "limitReachedWeek": "Límite de {{limit}} reservas por semana alcanzado.",
+    "limitReachedDay": "Ya tienes una reserva ese día (1 por día).",
+    "error": "Error al reservar. Inténtalo de nuevo."
+  },
+  "cancel": {
+    "title": "¿Cancelar reserva?",
+    "warn": "El turno vuelve a quedar libre. No se puede deshacer.",
+    "yours": "Tu reserva", "codeRemembered": "🔑 Cancelaremos con el código que usaste ✓",
+    "enterCode": "Código de cancelación", "askCode": "El código de esta reserva no está guardado — introduce el código que usaste:",
+    "wrongCode": "Código incorrecto. Inténtalo de nuevo.",
+    "doCancel": "Cancelar reserva", "error": "Error al cancelar. Inténtalo de nuevo."
+  }
 }

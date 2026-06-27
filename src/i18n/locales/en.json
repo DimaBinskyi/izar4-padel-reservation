@@ -8,5 +8,31 @@
     "dayBlocked": "Day is blocked. Booking unavailable.",
     "viewOnlyBeyondHorizon": "Beyond booking window — view only"
   },
-  "status": { "libre": "Free", "ocupado": "Busy", "bloqueado": "Blocked", "pasado": "Past", "pronto": "Soon", "mine": "Mine" }
+  "status": { "libre": "Free", "ocupado": "Busy", "bloqueado": "Blocked", "pasado": "Past", "pronto": "Soon", "mine": "Mine" },
+  "common": { "save": "Save", "cancel": "Cancel", "back": "Back", "confirm": "Confirm", "edit": "Edit" },
+  "profile": {
+    "fillTitle": "Fill your profile",
+    "fillSubtitle": "Once — then booking is one tap. We'll only re-ask if the data is lost.",
+    "editTitle": "Edit profile",
+    "name": "Name", "apartment": "Apartment", "cancelCode": "Cancel code",
+    "apartmentSearch": "Search… e.g. P3-7", "codeHint": "🔑 You'll need it to cancel a booking.",
+    "namePlaceholder": "Your name", "codePlaceholder": "e.g. sol24",
+    "pickFromList": "Pick an apartment from the list."
+  },
+  "booking": {
+    "title": "Confirm booking",
+    "resource": "Resource", "date": "Date", "slot": "Slot",
+    "bookingAs": "Booking as", "afterWeekly": "After booking: {{n}}/{{limit}} this week",
+    "limitReachedWeek": "Weekly limit of {{limit}} bookings reached.",
+    "limitReachedDay": "You already have a booking that day (1 per day).",
+    "error": "Booking failed. Try again."
+  },
+  "cancel": {
+    "title": "Cancel booking?",
+    "warn": "The slot becomes free again. This cannot be undone.",
+    "yours": "Your booking", "codeRemembered": "🔑 We'll cancel with the code you booked with ✓",
+    "enterCode": "Cancel code", "askCode": "This booking's code isn't saved — enter the code you booked with:",
+    "wrongCode": "Wrong code. Try again.",
+    "doCancel": "Cancel booking", "error": "Cancellation failed. Try again."
+  }
 }
