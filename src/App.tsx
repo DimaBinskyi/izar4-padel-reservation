@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavBar, type Tab } from './components/NavBar';
 import { InstallBanner } from './components/InstallBanner';
 import { SlotsScreen } from './screens/SlotsScreen';
@@ -13,6 +13,12 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('slots');
   const [profile, setProfile] = useState<Profile | null>(loadProfile());
   const need = !isProfileComplete(profile);
+
+  useEffect(() => {
+    const sync = () => { void import('./lib/syncGrabbed').then((m) => m.pullGrabbed()).catch(() => {}); };
+    sync();
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') sync(); });
+  }, []);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
