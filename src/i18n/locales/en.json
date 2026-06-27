@@ -9,7 +9,7 @@
     "viewOnlyBeyondHorizon": "Beyond booking window — view only"
   },
   "status": { "libre": "Free", "ocupado": "Busy", "bloqueado": "Blocked", "pasado": "Past", "pronto": "Soon", "mine": "Mine" },
-  "common": { "save": "Save", "cancel": "Cancel", "back": "Back", "confirm": "Confirm", "edit": "Edit" },
+  "common": { "save": "Save", "cancel": "Cancel", "back": "Back", "confirm": "Confirm", "edit": "Edit", "loading": "Loading…" },
   "profile": {
     "fillTitle": "Fill your profile",
     "fillSubtitle": "Once — then booking is one tap. We'll only re-ask if the data is lost.",

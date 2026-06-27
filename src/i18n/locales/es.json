@@ -9,7 +9,7 @@
     "viewOnlyBeyondHorizon": "Fuera del plazo de reserva — solo consulta"
   },
   "status": { "libre": "Libre", "ocupado": "Ocupado", "bloqueado": "Bloqueado", "pasado": "Pasado", "pronto": "Pronto", "mine": "Mía" },
-  "common": { "save": "Guardar", "cancel": "Cancelar", "back": "Volver", "confirm": "Confirmar", "edit": "Editar" },
+  "common": { "save": "Guardar", "cancel": "Cancelar", "back": "Volver", "confirm": "Confirmar", "edit": "Editar", "loading": "Cargando…" },
   "profile": {
     "fillTitle": "Completa tu perfil",
     "fillSubtitle": "Una vez — y reservar es un toque. Solo te lo pediremos otra vez si se pierden los datos.",

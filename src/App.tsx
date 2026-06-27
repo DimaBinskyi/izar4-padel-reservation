@@ -22,7 +22,7 @@ export default function App() {
   function go(x: Tab) { setProfile(loadProfile()); setTab(x); }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', paddingTop: 'env(safe-area-inset-top)' }}>
       <InstallBanner />
       <div style={{ flex: 1 }}>
         {tab === 'slots' && <SlotsScreen />}

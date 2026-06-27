@@ -3,3 +3,11 @@
 body { margin: 0; background: #0b0f17; color: #e7eefb;
   font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif; }
 button { font: inherit; }
+input, select, textarea { font-size: 16px; }  /* iOS: <16px focuses-zoom */
+
+@keyframes padspin { to { transform: rotate(360deg); } }
+.spinner {
+  display: inline-block; width: 16px; height: 16px; vertical-align: middle;
+  border: 2px solid rgba(255, 255, 255, .3); border-top-color: #fff; border-radius: 50%;
+  animation: padspin .7s linear infinite;
+}

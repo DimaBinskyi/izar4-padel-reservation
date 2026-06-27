@@ -4,6 +4,7 @@ import type { Profile } from '../lib/profile';
 import type { SlotView } from '../lib/types';
 import { ymdToDate } from '../lib/dates';
 import { WEEKLY_LIMIT } from '../config';
+import { Spinner } from './Spinner';
 
 interface Props {
   slot: SlotView;
@@ -51,7 +52,7 @@ export function BookingModal({ slot, fecha, profile, weeklyCountAfter, onConfirm
         {error && <div style={{ fontSize: 12, color: '#ff9b9b', marginBottom: 10 }}>{error}</div>}
         <div style={{ display: 'flex', gap: 10 }}>
           <button style={{ flex: 1, padding: '12px 0', borderRadius: 12, border: 'none', background: '#16202e', color: '#cfe0f5', fontWeight: 700 }} onClick={onClose} disabled={busy}>{t('common.cancel')}</button>
-          <button style={{ flex: 1, padding: '12px 0', borderRadius: 12, border: 'none', background: '#1d4ed8', color: '#fff', fontWeight: 700, opacity: busy ? 0.6 : 1 }} onClick={go} disabled={busy}>{t('common.confirm')}</button>
+          <button style={{ flex: 1, padding: '12px 0', borderRadius: 12, border: 'none', background: '#1d4ed8', color: '#fff', fontWeight: 700, opacity: busy ? 0.6 : 1 }} onClick={go} disabled={busy}>{busy ? <Spinner /> : t('common.confirm')}</button>
         </div>
       </div>
     </div>
