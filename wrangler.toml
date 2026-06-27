@@ -6,12 +6,12 @@ assets = { directory = "./dist", binding = "ASSETS" }
 
 [[kv_namespaces]]
 binding = "KV"
-id = "REPLACE_WITH_KV_ID"          # set after `wrangler kv namespace create padel-kv`
+id = "c753a6d720184a749099ca5c43dda2e4"
 
 [triggers]
 crons = ["* * * * *"]              # runs every minute; handler decides 2-min/10-min cadence
 
 [vars]
-VAPID_PUBLIC = "REPLACE_WITH_PUBLIC"
+VAPID_PUBLIC = "BE7neHWvrvIwvUGmfcmED_4T-wrY-ImgmoKz4tXGZTLs42Moq6onexJ0hybhm_P7H771ljqtjT-7hzV2EI6b5x8"
 VAPID_SUBJECT = "mailto:dima@koolzone.com"
 # VAPID_PRIVATE + DEVICE_SECRET are secrets: `wrangler secret put VAPID_PRIVATE` etc.
