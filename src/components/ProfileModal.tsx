@@ -34,14 +34,24 @@ export function ProfileModal({ initial, mode, onSave, onClose }: Props) {
   const [touched, setTouched] = useState(false);
 
   useEffect(() => {
-    fetchInmuebles(getDeviceSecret()).then(setViviendas).catch(() => setViviendas([]));
+    // Retry: izar4's WAF can 503 the dwellings list under a cold-start burst.
+    let cancelled = false;
+    (async () => {
+      for (let i = 0; i < 3 && !cancelled; i++) {
+        const list = await fetchInmuebles(getDeviceSecret()).catch(() => [] as string[]);
+        if (list.length) { if (!cancelled) setViviendas(list); return; }
+        await new Promise((r) => setTimeout(r, 500 + i * 600));
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const matches = vivienda.trim()
     ? viviendas.filter((v) => v.toLowerCase().includes(vivienda.trim().toLowerCase())).slice(0, 8)
     : [];
   const exact = viviendas.some((v) => v.toUpperCase() === vivienda.trim().toUpperCase());
-  const valid = nombre.trim() !== '' && exact && codigo.trim() !== '';
+  // If the dwellings list couldn't load, fall back to accepting the typed value (don't block first-run).
+  const valid = nombre.trim() !== '' && vivienda.trim() !== '' && codigo.trim() !== '' && (exact || viviendas.length === 0);
 
   function submit() {
     setTouched(true);
@@ -77,7 +87,7 @@ export function ProfileModal({ initial, mode, onSave, onClose }: Props) {
               ))}
             </div>
           )}
-          {touched && !exact && (
+          {touched && !exact && viviendas.length > 0 && (
             <div style={{ fontSize: 11, color: '#ff9b9b', marginTop: 5 }}>{t('profile.pickFromList')}</div>
           )}
         </div>

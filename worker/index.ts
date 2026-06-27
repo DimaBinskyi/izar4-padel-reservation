@@ -55,13 +55,27 @@ export default {
         return json({ grabbed: raw ? JSON.parse(raw) : [] });
       }
 
-      // default: transparent proxy to izar4
-      const target = IZAR4 + url.pathname.replace(/^\/api/, '') + url.search;
-      const upstream = await fetch(target, {
+      // default: proxy to izar4. izar4's WAF 503s on concurrent bursts, so retry on 503,
+      // and short-cache static-ish GETs in KV so warm loads barely touch the origin.
+      const path = url.pathname.replace(/^\/api/, '');
+      const isCacheableGet = req.method === 'GET' &&
+        ['/wp/v2/franjas', '/wp/v2/bloqueos', '/wp/v2/bloqueos-fecha', '/app/v1/inmuebles'].some((p) => path.startsWith(p));
+      const cacheKey = `cache:${path}${url.search}`;
+      if (isCacheableGet) {
+        const hit = await env.KV.get(cacheKey);
+        if (hit !== null) return proxied(hit);
+      }
+      const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.text();
+      const upstream = await izar4Fetch(IZAR4 + path + url.search, {
         method: req.method,
         headers: { 'content-type': req.headers.get('content-type') ?? 'application/json' },
-        body: req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.text(),
+        body,
       });
+      if (isCacheableGet && upstream.ok) {
+        const text = await upstream.text();
+        await env.KV.put(cacheKey, text, { expirationTtl: 60 });
+        return proxied(text);
+      }
       const headers = new Headers(upstream.headers);
       for (const [k, v] of Object.entries(CORS)) headers.set(k, v);
       ['content-encoding', 'content-length', 'transfer-encoding', 'content-range', 'set-cookie'].forEach((h) => headers.delete(h));
@@ -85,6 +99,26 @@ export default {
 
 function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json', ...CORS } });
+}
+
+function proxied(bodyText: string): Response {
+  return new Response(bodyText, { status: 200, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...CORS } });
+}
+
+function sleep(ms: number): Promise<void> { return new Promise((r) => setTimeout(r, ms)); }
+
+// Fetch izar4 with retry on 503 / network error (its WAF throttles concurrent bursts).
+async function izar4Fetch(target: string, init: RequestInit): Promise<Response> {
+  let last: Response | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await sleep(200 + attempt * 250 + Math.floor(Math.random() * 150));
+    try {
+      const res = await fetch(target, init);
+      if (res.status !== 503) return res;
+      last = res;
+    } catch { /* network error → retry */ }
+  }
+  return last ?? new Response('upstream error', { status: 502 });
 }
 
 async function runPoll(env: Env, now: Date): Promise<void> {

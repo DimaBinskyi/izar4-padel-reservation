@@ -8,7 +8,7 @@ import { CancelModal } from '../components/CancelModal';
 import { WatchSheet } from '../components/WatchSheet';
 import { deriveSlots } from '../lib/status';
 import {
-  fetchFranjas, fetchReservations, fetchAllReservations, fetchWeekdayBlocks, fetchDayBlock,
+  fetchFranjas, fetchAllReservations, fetchWeekdayBlocks, fetchDayBlock,
   createReservation, cancelReservation,
 } from '../lib/izar4Client';
 import { getDeviceSecret } from '../lib/deviceSecret';
@@ -44,16 +44,16 @@ export function SlotsScreen() {
     if (!silent) setSlots(null);
     setError(null); setBlockedMsg(null);
     try {
-      const [franjasFetched, reservations, allReservations, weekdayBlocks, dayBlock] = await Promise.all([
-        fetchFranjas(secret),
-        fetchReservations(secret, selected),
-        fetchAllReservations(secret),
-        fetchWeekdayBlocks(secret),
-        fetchDayBlock(secret, selected),
-      ]);
+      // Sequential (not Promise.all): izar4's WAF 503s on concurrent bursts. Static data is
+      // session-cached in the client, so warm loads only fetch reservations + the day block.
+      const franjasFetched = await fetchFranjas(secret);
+      const weekdayBlocks = await fetchWeekdayBlocks(secret);
+      const allReservations = await fetchAllReservations(secret);
+      const dayBlock = await fetchDayBlock(secret, selected);
       setAllRes(allReservations);
       setFranjas(franjasFetched);
       if (dayBlock) { setBlockedMsg(dayBlock.motivo || t('slots.dayBlocked')); setSlots([]); return; }
+      const reservations = allReservations.filter((r) => r.fecha === selected);
       setSlots(deriveSlots({ fecha: selected, franjas: franjasFetched, reservations, weekdayBlocks, dayBlocked: false, now: new Date() }));
     } catch { setError(t('slots.error')); }
   }, [secret, selected, t]);
