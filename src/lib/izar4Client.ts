@@ -105,3 +105,17 @@ export async function fetchReservationCode(secret: string, idReserva: number): P
   const d = (await r.json().catch(() => ({}))) as { acf?: { codigo_cancelacion_reservas?: string } };
   return d.acf?.codigo_cancelacion_reservas ?? '';
 }
+
+export async function fetchAllReservations(secret: string): Promise<Reservation[]> {
+  const r = await get(`/wp/v2/reservas?per_page=100&recurso=${PADEL_TERM_ID}&_fields=id,slug,acf`, secret);
+  const data = (await r.json()) as any[];
+  return data
+    .filter((x) => x.acf && x.acf.fecha_reservas)
+    .map((x) => ({
+      id: Number(x.id),
+      slot: x.acf.id_franja_reservas,
+      fecha: normalizeYmd(x.acf.fecha_reservas),
+      nombre: x.acf.nombre_reservas ?? '',
+      vivienda: x.acf.vivienda_reservas ?? '',
+    }));
+}
