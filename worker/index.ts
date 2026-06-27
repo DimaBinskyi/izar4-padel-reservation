@@ -30,6 +30,12 @@ export default {
       const upstream = await fetch(target, init);
       const headers = new Headers(upstream.headers);
       for (const [k, v] of Object.entries(CORS)) headers.set(k, v);
+      headers.delete('content-encoding');
+      headers.delete('content-length');
+      headers.delete('transfer-encoding');
+      headers.delete('content-range');
+      headers.delete('set-cookie');
+      headers.set('cache-control', 'no-store');
       return new Response(upstream.body, { status: upstream.status, headers });
     }
 

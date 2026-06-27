@@ -13,7 +13,7 @@ export async function fetchFranjas(secret: string): Promise<Franja[]> {
   const r = await get(`/wp/v2/franjas?per_page=100&recurso=${PADEL_TERM_ID}&_fields=id,slug,title,acf`, secret);
   const data = (await r.json()) as any[];
   return data.map((f) => ({
-    id: f.id,
+    id: Number(f.id),
     slot: f.title?.rendered ?? f.slug,
     start: (f.acf?.hora_inicio_franjas ?? '--:--').slice(0, 5),
     end: (f.acf?.hora_fin_franjas ?? '--:--').slice(0, 5),
@@ -27,7 +27,7 @@ export async function fetchReservations(secret: string, fecha: string): Promise<
   return data
     .filter((x) => x.acf && normalizeYmd(x.acf.fecha_reservas) === fecha)
     .map((x) => ({
-      id: x.id,
+      id: Number(x.id),
       slot: x.acf.id_franja_reservas,
       fecha: normalizeYmd(x.acf.fecha_reservas),
       nombre: x.acf.nombre_reservas ?? '',

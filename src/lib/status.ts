@@ -1,5 +1,5 @@
 import type { Franja, Reservation, SlotView, WeekdayBlockSet } from './types';
-import { ymdToDate, weekdayCode, isPastYmd, isTodayYmd } from './dates';
+import { weekdayCode, isPastYmd, isTodayYmd } from './dates';
 
 export interface DeriveInput {
   fecha: string;                  // YYYYMMDD

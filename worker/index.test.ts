@@ -36,4 +36,21 @@ describe('worker proxy', () => {
     const res = await worker.fetch(new Request('https://app.dev/index.html'), ENV);
     expect(await res.text()).toBe('asset');
   });
+
+  it('forwards POST body to izar4 with secret', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('{"ok":true,"id":99}', { status: 200, headers: { 'content-type': 'application/json' } }),
+    );
+    const body = JSON.stringify({ idFranja: 'P1-1', fecha: '20260703' });
+    const req = new Request('https://app.dev/api/wp-json/app/v1/reservar', {
+      method: 'POST',
+      headers: { 'x-device-secret': 's3cret', 'content-type': 'application/json' },
+      body,
+    });
+    const res = await worker.fetch(req, ENV);
+    expect(res.status).toBe(200);
+    const init = spy.mock.calls[0][1] as RequestInit;
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(body);
+  });
 });
