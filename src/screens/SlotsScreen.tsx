@@ -11,12 +11,12 @@ import {
   createReservation, cancelReservation,
 } from '../lib/izar4Client';
 import { getDeviceSecret } from '../lib/deviceSecret';
-import { dateToYmd } from '../lib/dates';
+import { dateToYmd, addDays } from '../lib/dates';
 import { loadProfile, saveProfile, isProfileComplete, type Profile } from '../lib/profile';
 import { isMine } from '../lib/mine';
 import { countDay, weeklyRemaining, countWeek } from '../lib/limits';
 import { recordBooking, markCancelled, bookingKey } from '../lib/bookingsDb';
-import { WEEKLY_LIMIT, DAILY_LIMIT } from '../config';
+import { WEEKLY_LIMIT, DAILY_LIMIT, BOOKING_HORIZON_DAYS } from '../config';
 import type { Reservation, SlotView } from '../lib/types';
 
 export function SlotsScreen() {
@@ -35,8 +35,9 @@ export function SlotsScreen() {
   const secret = getDeviceSecret();
   const needProfile = !isProfileComplete(profile);
 
-  const load = useCallback(async () => {
-    setSlots(null); setError(null); setBlockedMsg(null);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setSlots(null);
+    setError(null); setBlockedMsg(null);
     try {
       const [franjas, reservations, allReservations, weekdayBlocks, dayBlock] = await Promise.all([
         fetchFranjas(secret),
@@ -54,6 +55,7 @@ export function SlotsScreen() {
   useEffect(() => { void load(); }, [load]);
 
   const remaining = profile ? weeklyRemaining(allRes, profile.vivienda, selected, WEEKLY_LIMIT) : WEEKLY_LIMIT;
+  const beyondHorizon = selected > addDays(today, BOOKING_HORIZON_DAYS);
 
   async function doBook(slot: SlotView) {
     if (!profile) return;
@@ -66,8 +68,12 @@ export function SlotsScreen() {
       start: slot.franja.start, end: slot.franja.end, nombre: profile.nombre, vivienda: profile.vivienda.toUpperCase(),
       codigoUsed: profile.codigo, origin: 'app', status: 'active', createdAt: Date.now(),
     });
+    // Optimistic update (izar4 has read-after-write lag); reconcile silently after the lag clears.
+    const optimistic: Reservation = { id: r.id ?? 0, slot: slot.franja.slot, fecha: selected, nombre: profile.nombre, vivienda: profile.vivienda.toUpperCase() };
+    setAllRes((prev) => [...prev, optimistic]);
+    setSlots((prev) => prev?.map((s) => (s.franja.slot === slot.franja.slot ? { ...s, status: 'ocupado', reservation: optimistic } : s)) ?? prev);
     setBookSlot(null);
-    await load();
+    window.setTimeout(() => { void load(true); }, 2000);
   }
 
   async function doCancel(slot: SlotView, codigo: string): Promise<boolean> {
@@ -75,13 +81,16 @@ export function SlotsScreen() {
     const r = await cancelReservation(secret, id, codigo);
     if (!r.ok) return false;
     await markCancelled(selected, slot.franja.slot, Date.now());
+    setAllRes((prev) => prev.filter((x) => !(x.fecha === selected && x.slot === slot.franja.slot)));
+    setSlots((prev) => prev?.map((s) => (s.franja.slot === slot.franja.slot ? { ...s, status: 'libre', reservation: null } : s)) ?? prev);
     setCancelSlot(null);
-    await load();
+    window.setTimeout(() => { void load(true); }, 2000);
     return true;
   }
 
   function tryBook(slot: SlotView) {
     if (!profile) { setEditingProfile(true); return; }
+    if (beyondHorizon) { alert(t('slots.viewOnlyBeyondHorizon')); return; }
     if (countDay(allRes, profile.vivienda, selected) >= DAILY_LIMIT) { alert(t('booking.limitReachedDay')); return; }
     if (countWeek(allRes, profile.vivienda, selected) >= WEEKLY_LIMIT) { alert(t('booking.limitReachedWeek', { limit: WEEKLY_LIMIT })); return; }
     setBookSlot(slot);
@@ -116,6 +125,7 @@ export function SlotsScreen() {
         {slots?.map((s) => (
           <SlotRow key={s.franja.slot} slot={s}
             mine={!!(s.reservation && profile && isMine(s.reservation, profile))}
+            canBook={!beyondHorizon}
             onBook={() => tryBook(s)} onCancel={() => setCancelSlot(s)} />
         ))}
       </div>

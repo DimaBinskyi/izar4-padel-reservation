@@ -13,11 +13,12 @@ const BADGE: Record<string, { bg: string; fg: string }> = {
 interface Props {
   slot: SlotView;
   mine: boolean;          // this occupied slot belongs to the user
+  canBook: boolean;       // false when the date is beyond the booking horizon (view-only)
   onBook: () => void;     // for free slots
   onCancel: () => void;   // for own slots
 }
 
-export function SlotRow({ slot, mine, onBook, onCancel }: Props) {
+export function SlotRow({ slot, mine, canBook, onBook, onCancel }: Props) {
   const { t } = useTranslation();
   const badgeKey = mine && slot.status === 'ocupado' ? 'mine' : slot.status;
   const c = BADGE[badgeKey];
@@ -38,7 +39,7 @@ export function SlotRow({ slot, mine, onBook, onCancel }: Props) {
         )}
       </div>
       <div style={{ width: 34 }}>
-        {slot.status === 'libre' && (
+        {slot.status === 'libre' && canBook && (
           <button onClick={onBook} aria-label="book"
             style={{ width: 34, height: 34, borderRadius: 10, border: 'none', background: '#1d4ed8', color: '#fff', fontSize: 17, fontWeight: 700 }}>+</button>
         )}

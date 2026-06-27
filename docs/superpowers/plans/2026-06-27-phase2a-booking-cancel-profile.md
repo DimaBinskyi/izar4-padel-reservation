@@ -1335,3 +1335,19 @@ git commit -m "feat: wire booking + cancellation into SlotsScreen (profile gate,
 **Type consistency:** `Profile`, `BookingRecord`, `CancelPlan`, `Reservation`, `SlotView` used consistently. `createReservation`/`cancelReservation`/`fetchReservationCode`/`fetchAllReservations` signatures match their call sites in `SlotsScreen`. `bookingKey(fecha, slot)` used for both record and lookup. `SlotRow` new props (`mine`, `onBook`, `onCancel`) match its single call site.
 
 **Note for 2b:** introduce a tab/nav shell and move `alert()` limit messages to inline UI; add My-bookings (origin badges) + Stats (period selector) + InstallBanner.
+
+---
+
+## Post-review fixes (applied after final review)
+
+Three fixes landed after the final code review (all verified: `tsc` clean, 38 tests, build OK):
+
+1. **21-day horizon enforced at booking** (was a plan omission vs spec §7.1). `SlotsScreen` computes
+   `beyondHorizon = selected > addDays(today, BOOKING_HORIZON_DAYS)`, passes `canBook={!beyondHorizon}`
+   to `SlotRow` (hides `+` beyond the horizon), and `tryBook` early-returns with
+   `t('slots.viewOnlyBeyondHorizon')` as a guard. `SlotRow` gained a `canBook: boolean` prop.
+2. **Optimistic UI + delayed reconcile** for izar4 read-after-write lag. `doBook`/`doCancel` update
+   `slots`/`allRes` immediately, then `load(true)` (new silent param — skips the loading flash)
+   runs after 2000 ms to reconcile.
+3. **Ask-mode cancel field prefilled** with the user's own profile code (`CancelModal` initial
+   `typed = profile.codigo`), per spec §7.3.

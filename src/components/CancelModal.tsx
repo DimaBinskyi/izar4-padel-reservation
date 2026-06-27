@@ -23,7 +23,7 @@ const row: React.CSSProperties = { display: 'flex', justifyContent: 'space-betwe
 export function CancelModal({ slot, fecha, profile, onConfirm, onClose }: Props) {
   const { t, i18n } = useTranslation();
   const [plan, setPlan] = useState<CancelPlan | null>(null);
-  const [typed, setTyped] = useState('');
+  const [typed, setTyped] = useState(profile.codigo);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const d = ymdToDate(fecha);
