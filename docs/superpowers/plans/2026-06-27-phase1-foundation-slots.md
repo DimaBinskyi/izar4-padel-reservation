@@ -58,7 +58,7 @@ Each file has one responsibility: `dates.ts` (time math), `status.ts` (one slot 
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -106,8 +106,7 @@ Each file has one responsibility: `dates.ts` (time math), `status.ts` (one slot 
     "noFallthroughCasesInSwitch": true,
     "types": ["vitest/globals"]
   },
-  "include": ["src", "worker"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": ["src", "worker"]
 }
 ```
 
@@ -930,7 +929,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 
 - [ ] **Step 7: Verify build typechecks**
 
-Run: `npx tsc -b --noEmit`
+Run: `npx tsc --noEmit`
 Expected: no errors.
 
 - [ ] **Step 8: Commit**
@@ -953,7 +952,7 @@ Renders `CALENDAR_DAYS` days from today; days beyond `BOOKING_HORIZON_DAYS` are 
 
 ```tsx
 import { useTranslation } from 'react-i18next';
-import { addDays, dateToYmd, ymdToDate } from '../lib/dates';
+import { addDays, ymdToDate } from '../lib/dates';
 import { CALENDAR_DAYS, BOOKING_HORIZON_DAYS } from '../config';
 
 interface Props {
@@ -998,7 +997,7 @@ export function DateStrip({ todayYmd, selected, onSelect }: Props) {
 
 - [ ] **Step 2: Typecheck**
 
-Run: `npx tsc -b --noEmit`
+Run: `npx tsc --noEmit`
 Expected: no errors.
 
 - [ ] **Step 3: Commit**
@@ -1057,7 +1056,7 @@ export function SlotRow({ slot }: { slot: SlotView }) {
 
 - [ ] **Step 2: Typecheck**
 
-Run: `npx tsc -b --noEmit`
+Run: `npx tsc --noEmit`
 Expected: no errors.
 
 - [ ] **Step 3: Commit**
@@ -1161,7 +1160,7 @@ export function SlotsScreen() {
 
 - [ ] **Step 3: Typecheck**
 
-Run: `npx tsc -b --noEmit`
+Run: `npx tsc --noEmit`
 Expected: no errors.
 
 - [ ] **Step 4: Manual smoke test (two terminals)**

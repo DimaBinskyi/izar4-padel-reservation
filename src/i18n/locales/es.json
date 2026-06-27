@@ -1,0 +1,12 @@
+{
+  "app": { "title": "Pádel" },
+  "tabs": { "slots": "Turnos", "watch": "Captura", "stats": "Estadísticas", "settings": "Ajustes" },
+  "slots": {
+    "selectDate": "Selecciona una fecha",
+    "loading": "Cargando turnos…",
+    "error": "Error al cargar los turnos.",
+    "dayBlocked": "Día bloqueado. Reserva no disponible.",
+    "viewOnlyBeyondHorizon": "Fuera del plazo de reserva — solo consulta"
+  },
+  "status": { "libre": "Libre", "ocupado": "Ocupado", "bloqueado": "Bloqueado", "pasado": "Pasado", "pronto": "Pronto", "mine": "Mía" }
+}
