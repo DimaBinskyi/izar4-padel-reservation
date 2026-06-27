@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+build/
+.output/
+.vite/
+
+# Cloudflare / Wrangler
+.wrangler/
+.dev.vars
+worker/.wrangler/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Brainstorming visual companion (local only)
+.superpowers/
+
+# Playwright MCP scratch (research artifacts)
+.playwright-mcp/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.log
