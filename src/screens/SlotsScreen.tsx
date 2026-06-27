@@ -6,9 +6,10 @@ import { ProfileModal } from '../components/ProfileModal';
 import { BookingModal } from '../components/BookingModal';
 import { CancelModal } from '../components/CancelModal';
 import { WatchSheet } from '../components/WatchSheet';
+import { Spinner } from '../components/Spinner';
 import { deriveSlots } from '../lib/status';
 import {
-  fetchFranjas, fetchAllReservations, fetchWeekdayBlocks, fetchDayBlock,
+  fetchFranjas, fetchAllReservations, fetchWeekdayBlocks, fetchDayBlocks,
   createReservation, cancelReservation,
 } from '../lib/izar4Client';
 import { getDeviceSecret } from '../lib/deviceSecret';
@@ -21,7 +22,7 @@ import { addRecentAction } from '../lib/recentActions';
 import { applyOverrides, addOverride } from '../lib/overrides';
 import { syncRegistration } from '../lib/pushClient';
 import { WEEKLY_LIMIT, DAILY_LIMIT, BOOKING_HORIZON_DAYS, CALENDAR_DAYS } from '../config';
-import type { Franja, Reservation, SlotView } from '../lib/types';
+import type { Franja, Reservation, SlotView, WeekdayBlockSet } from '../lib/types';
 
 interface SlotsScreenProps {
   focus?: { fecha: string; slot: string } | null;   // jump to + blink a slot (from My bookings)
@@ -31,46 +32,53 @@ interface SlotsScreenProps {
 export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps = {}) {
   const { t } = useTranslation();
   const today = dateToYmd(new Date());
+  const maxYmd = addDays(today, CALENDAR_DAYS - 1);
   const [selected, setSelected] = useState(today);
-  const [slots, setSlots] = useState<SlotView[] | null>(null);
+
+  // All data is fetched once (reservations for all dates come from the cron snapshot), so adjacent
+  // days are already available to render during a swipe. We re-fetch (silently) on each day change.
   const [allRes, setAllRes] = useState<Reservation[]>([]);
+  const [franjas, setFranjas] = useState<Franja[]>([]);
+  const [weekdayBlocks, setWeekdayBlocks] = useState<WeekdayBlockSet>({});
+  const [dayBlocks, setDayBlocks] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [blockedMsg, setBlockedMsg] = useState<string | null>(null);
+
   const [profile, setProfile] = useState<Profile | null>(loadProfile());
   const [editingProfile, setEditingProfile] = useState(false);
   const [bookSlot, setBookSlot] = useState<SlotView | null>(null);
   const [cancelSlot, setCancelSlot] = useState<SlotView | null>(null);
-  const [franjas, setFranjas] = useState<Franja[]>([]);
   const [watchOpen, setWatchOpen] = useState(false);
   const [highlightSlot, setHighlightSlot] = useState<string | null>(null);
+
+  // Carousel drag state.
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const dragStart = useRef<{ x: number; y: number } | null>(null);
+  const [dragX, setDragX] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [instant, setInstant] = useState(false);   // disable transition for the post-slide recenter
 
   const secret = getDeviceSecret();
   const needProfile = !isProfileComplete(profile);
 
   const load = useCallback(async (silent = false, live = false) => {
-    if (!silent) setSlots(null);
-    setError(null); setBlockedMsg(null);
+    if (!silent) setLoading(true);
+    setError(null);
     try {
-      // Sequential (not Promise.all): izar4's WAF 503s on concurrent bursts. Static data is
-      // session-cached in the client, so warm loads only fetch reservations + the day block.
-      const franjasFetched = await fetchFranjas(secret);
-      const weekdayBlocks = await fetchWeekdayBlocks(secret);
-      const allReservations = applyOverrides(await fetchAllReservations(secret, live));
-      const dayBlock = await fetchDayBlock(secret, selected);
-      setAllRes(allReservations);
-      setFranjas(franjasFetched);
-      if (dayBlock) { setBlockedMsg(dayBlock.motivo || t('slots.dayBlocked')); setSlots([]); return; }
-      const reservations = allReservations.filter((r) => r.fecha === selected);
-      setSlots(deriveSlots({ fecha: selected, franjas: franjasFetched, reservations, weekdayBlocks, dayBlocked: false, now: new Date() }));
-    } catch { setError(t('slots.error')); }
-  }, [secret, selected, t]);
+      const f = await fetchFranjas(secret);          // session-cached
+      const wb = await fetchWeekdayBlocks(secret);    // session-cached
+      const all = applyOverrides(await fetchAllReservations(secret, live));
+      const db = await fetchDayBlocks(secret);        // worker-cached
+      setFranjas(f); setWeekdayBlocks(wb); setAllRes(all); setDayBlocks(db);
+    } catch { setError(t('slots.error')); } finally { setLoading(false); }
+  }, [secret, t]);
 
   useEffect(() => { void load(); }, [load]);
 
-  // Jump to a slot (from My bookings): switch date, then blink it for 3s.
+  // Jump to a slot (from My bookings): switch date, refresh, then blink it for 3s.
   useEffect(() => {
-    if (focus) { setSelected(focus.fecha); setHighlightSlot(focus.slot); onFocusConsumed?.(); }
-  }, [focus, onFocusConsumed]);
+    if (focus) { setSelected(focus.fecha); setHighlightSlot(focus.slot); void load(true, true); onFocusConsumed?.(); }
+  }, [focus, onFocusConsumed, load]);
   useEffect(() => {
     if (!highlightSlot) return;
     const id = window.setTimeout(() => setHighlightSlot(null), 3000);
@@ -80,23 +88,50 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
   const remaining = profile ? weeklyRemaining(allRes, profile.vivienda, selected, WEEKLY_LIMIT) : WEEKLY_LIMIT;
   const beyondHorizon = selected > addDays(today, BOOKING_HORIZON_DAYS);
 
-  // Swipe left/right on the slot list to move to the next/previous day (clamped to today … +1 month).
-  const touchRef = useRef<{ x: number; y: number } | null>(null);
-  const maxYmd = addDays(today, CALENDAR_DAYS - 1);
-  function shiftDay(dir: 1 | -1) {
-    setSelected((cur) => {
-      const next = addDays(cur, dir);
-      return next < today || next > maxYmd ? cur : next;
-    });
+  function goToDate(d: string) {
+    if (d < today || d > maxYmd) return;
+    setSelected(d);
+    setHighlightSlot(null);
+    void load(true, true);  // refresh on transition
   }
-  function onTouchStart(e: React.TouchEvent) { const tp = e.touches[0]; touchRef.current = { x: tp.clientX, y: tp.clientY }; }
-  function onTouchEnd(e: React.TouchEvent) {
-    const start = touchRef.current; touchRef.current = null;
-    if (!start) return;
-    const tp = e.changedTouches[0];
-    const dx = tp.clientX - start.x, dy = tp.clientY - start.y;
-    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return; // horizontal swipes only
-    shiftDay(dx < 0 ? 1 : -1);  // swipe left → next day, right → previous
+
+  // ── Carousel touch handlers ──
+  function onTouchStart(e: React.TouchEvent) {
+    const tp = e.touches[0];
+    dragStart.current = { x: tp.clientX, y: tp.clientY };
+    setInstant(false);
+    setDragging(true);
+  }
+  function onTouchMove(e: React.TouchEvent) {
+    const s = dragStart.current;
+    if (!s) return;
+    const tp = e.touches[0];
+    const dx = tp.clientX - s.x, dy = tp.clientY - s.y;
+    if (Math.abs(dx) < Math.abs(dy)) return;             // vertical gesture → let it scroll
+    const atStart = selected <= today && dx > 0;
+    const atEnd = selected >= maxYmd && dx < 0;
+    setDragX(atStart || atEnd ? dx * 0.3 : dx);          // rubber-band at the ends
+  }
+  function onTouchEnd() {
+    const had = dragStart.current;
+    dragStart.current = null;
+    setDragging(false);
+    if (!had) return;
+    const W = viewportRef.current?.clientWidth ?? 360;
+    const dx = dragX;
+    const threshold = Math.min(80, W * 0.22);
+    const dir = dx < 0 ? 1 : -1;
+    const target = addDays(selected, dir);
+    if (Math.abs(dx) < threshold || target < today || target > maxYmd) { setDragX(0); return; }
+    setDragX(dir < 0 ? -W : W);   // animate the full slide
+    window.setTimeout(() => {
+      setInstant(true);
+      setSelected(target);
+      setHighlightSlot(null);
+      setDragX(0);
+      void load(true, true);      // re-fetch to refresh after the transition
+      requestAnimationFrame(() => requestAnimationFrame(() => setInstant(false)));
+    }, 260);
   }
 
   async function doBook(slot: SlotView) {
@@ -113,7 +148,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     addRecentAction(selected, slot.franja.slot);
     addOverride({ key: bookingKey(selected, slot.franja.slot), type: 'add', res: { id: r.id ?? 0, slot: slot.franja.slot, fecha: selected, nombre: profile.nombre, vivienda: profile.vivienda.toUpperCase() } });
     void syncRegistration();
-    await load(true, true);   // overrides keep this correct despite read-after-write lag
+    await load(true, true);
     setBookSlot(null);
   }
 
@@ -125,7 +160,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     addRecentAction(selected, slot.franja.slot);
     addOverride({ key: bookingKey(selected, slot.franja.slot), type: 'remove' });
     void syncRegistration();
-    await load(true, true);   // overrides keep the counter/slots correct despite read-after-write lag
+    await load(true, true);
     setCancelSlot(null);
     return true;
   }
@@ -138,11 +173,33 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     setBookSlot(slot);
   }
 
+  function renderDay(date: string) {
+    const interactive = date === selected;
+    if (dayBlocks[date] !== undefined) {
+      return <div style={{ padding: 16, color: '#f2c14e' }}>{dayBlocks[date] || t('slots.dayBlocked')}</div>;
+    }
+    const daySlots = deriveSlots({
+      fecha: date, franjas, reservations: allRes.filter((r) => r.fecha === date),
+      weekdayBlocks, dayBlocked: false, now: new Date(),
+    });
+    return daySlots.map((s) => (
+      <SlotRow key={s.franja.slot} slot={s}
+        mine={!!(s.reservation && profile && isMine(s.reservation, profile))}
+        canBook={interactive && date <= addDays(today, BOOKING_HORIZON_DAYS)}
+        highlight={interactive && highlightSlot === s.franja.slot}
+        onBook={() => { if (interactive) tryBook(s); }}
+        onCancel={() => { if (interactive) setCancelSlot(s); }}
+        onWatch={() => { if (interactive) setWatchOpen(true); }} />
+    ));
+  }
+
+  const days = [addDays(selected, -1), selected, addDays(selected, 1)];
+
   return (
     <div style={{ maxWidth: 420, margin: '0 auto' }}>
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px' }}>
         <button aria-label="watch" onClick={() => setWatchOpen(true)}
-          style={{ height: 30, padding: '0 9px', borderRadius: 8, border: 'none', background: '#16202e', color: '#f2c14e', fontSize: 12.5 }}>🎯 {t('watch.title')}</button>
+          style={{ border: 'none', background: '#16202e', color: '#cfe0f5', borderRadius: 8, padding: '6px 10px', fontSize: 12 }}>🎯 {t('watch.title')}</button>
         <span style={{ fontSize: 17, fontWeight: 700 }}>{t('app.title')}</span>
         <button aria-label="profile" onClick={() => setEditingProfile(true)}
           style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#16202e', color: '#cfe0f5' }}>⚙️</button>
@@ -150,29 +207,30 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
 
       {profile && (
         <div style={{ display: 'flex', gap: 8, padding: '0 14px 8px' }}>
-          <span style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 20, background: '#10261a', color: '#7ee2a8' }}>
-            {remaining}/{WEEKLY_LIMIT}
-          </span>
-          <span style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 20, background: '#101a2b', color: '#86b7ff' }}>
-            {profile.vivienda} · {profile.nombre}
-          </span>
+          <span style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 20, background: '#10261a', color: '#7ee2a8' }}>{remaining}/{WEEKLY_LIMIT}</span>
+          <span style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 20, background: '#101a2b', color: '#86b7ff' }}>{profile.vivienda} · {profile.nombre}</span>
         </div>
       )}
 
-      <DateStrip todayYmd={today} selected={selected} onSelect={setSelected} />
+      <DateStrip todayYmd={today} selected={selected} onSelect={goToDate} />
 
-      <div style={{ padding: '2px 10px 8px', minHeight: '60vh' }} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-        {error && <div style={{ padding: 16, color: '#ff9b9b' }}>{error}</div>}
-        {blockedMsg && <div style={{ padding: 16, color: '#f2c14e' }}>{blockedMsg}</div>}
-        {!error && !blockedMsg && slots === null && <div style={{ padding: 16, color: '#8aa0bd' }}>{t('slots.loading')}</div>}
-        {slots?.map((s) => (
-          <SlotRow key={s.franja.slot} slot={s}
-            mine={!!(s.reservation && profile && isMine(s.reservation, profile))}
-            canBook={!beyondHorizon}
-            highlight={highlightSlot === s.franja.slot}
-            onBook={() => tryBook(s)} onCancel={() => setCancelSlot(s)} onWatch={() => setWatchOpen(true)} />
-        ))}
-      </div>
+      {error && <div style={{ padding: 16, color: '#ff9b9b' }}>{error}</div>}
+      {loading && !error && <div style={{ padding: 16, color: '#8aa0bd', display: 'flex', gap: 8, alignItems: 'center' }}><Spinner /> {t('slots.loading')}</div>}
+
+      {!loading && !error && (
+        <div ref={viewportRef} style={{ overflow: 'hidden', minHeight: '60vh' }}
+          onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+          <div style={{
+            display: 'flex',
+            transform: `translateX(calc(-100% + ${dragX}px))`,
+            transition: dragging || instant ? 'none' : 'transform .26s ease',
+          }}>
+            {days.map((date) => (
+              <div key={date} style={{ flex: '0 0 100%', padding: '2px 10px 8px' }}>{renderDay(date)}</div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {(needProfile || editingProfile) && (
         <ProfileModal initial={profile} mode={needProfile ? 'fill' : 'edit'}

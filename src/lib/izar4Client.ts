@@ -66,6 +66,19 @@ export async function fetchDayBlock(secret: string, fecha: string): Promise<DayB
 
 let _inmueblesCache: string[] | null = null;
 
+// All date-blocks as a map { YYYYMMDD: motivo } — lets the carousel render any visible day instantly.
+export async function fetchDayBlocks(secret: string): Promise<Record<string, string>> {
+  const r = await get(`/wp/v2/bloqueos-fecha?per_page=100&recurso=${PADEL_TERM_ID}&_fields=id,acf`, secret);
+  const data = (await r.json()) as any[];
+  const map: Record<string, string> = {};
+  for (const b of data) {
+    if (!b.acf) continue;
+    const f = normalizeYmd(b.acf['fecha_bloqueo_bloqueos-fecha']);
+    if (f) map[f] = b.acf['motivo_bloqueos-fecha'] ?? '';
+  }
+  return map;
+}
+
 export async function fetchInmuebles(secret: string): Promise<string[]> {
   if (_inmueblesCache) return _inmueblesCache;
   const r = await fetch(`${APP_API_BASE}/inmuebles?tipo=vivienda`, {
