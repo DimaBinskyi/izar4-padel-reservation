@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { loadPrefs, savePrefs, defaultPrefs, isQuietNow, type NotifPrefs } from './notifPrefs';
+import { loadPrefs, savePrefs, defaultPrefs, isQuietNow } from './notifPrefs';
 
 beforeEach(() => localStorage.clear());
 
