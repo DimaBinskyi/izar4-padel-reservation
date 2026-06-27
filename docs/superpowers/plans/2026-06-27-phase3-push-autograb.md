@@ -359,7 +359,7 @@ git commit -m "feat: client push helpers (base64 decode, permission state) with 
 
 ```ts
 import { describe, it, expect, beforeEach } from 'vitest';
-import { loadPrefs, savePrefs, defaultPrefs, isQuietNow, type NotifPrefs } from './notifPrefs';
+import { loadPrefs, savePrefs, defaultPrefs, isQuietNow } from './notifPrefs';
 
 beforeEach(() => localStorage.clear());
 
@@ -630,7 +630,7 @@ git commit -m "feat: custom service worker (push + notificationclick) via inject
 ```ts
 import { buildPushPayload } from '@block65/webcrypto-web-push';
 
-export interface PushSub { endpoint: string; keys: { p256dh: string; auth: string } }
+export interface PushSub { endpoint: string; expirationTime: number | null; keys: { p256dh: string; auth: string } }
 export interface Vapid { subject: string; publicKey: string; privateKey: string }
 
 export async function sendPush(sub: PushSub, payload: object, vapid: Vapid): Promise<boolean> {
@@ -640,7 +640,7 @@ export async function sendPush(sub: PushSub, payload: object, vapid: Vapid): Pro
       sub,
       vapid,
     );
-    const res = await fetch(sub.endpoint, req);
+    const res = await fetch(sub.endpoint, req as unknown as RequestInit);
     return res.ok || res.status === 201;
   } catch {
     return false;
@@ -667,7 +667,6 @@ export interface Env {
 
 const IZAR4 = 'https://izar4.es';
 const TERM = 12;
-const HORIZON_DAYS = 21;
 const CORS = {
   'access-control-allow-origin': '*',
   'access-control-allow-methods': 'GET,POST,OPTIONS',
@@ -761,7 +760,6 @@ async function runPoll(env: Env, now: Date): Promise<void> {
   if (prev.length === 0) return; // first run: just seed the snapshot, no notifications
 
   const todayYmd = dateToYmd(now);
-  const horizonYmd = addDaysYmd(todayYmd, HORIZON_DAYS);
   const weekFreed = freed.filter((k) => { const d = k.split('|')[0]; return d >= todayYmd && d <= addDaysYmd(todayYmd, 7); });
 
   // 3. per device
@@ -813,7 +811,7 @@ async function runPoll(env: Env, now: Date): Promise<void> {
   }
 }
 
-async function maybePush(rec: DeviceRecord, type: string, payload: object, env: Env, vapid: Vapid, now: Date): Promise<void> {
+async function maybePush(rec: DeviceRecord, type: string, payload: object, _env: Env, vapid: Vapid, now: Date): Promise<void> {
   if (!rec.prefs.types[type]) return;
   if (rec.prefs.quiet?.enabled) {
     const cur = now.getHours() * 60 + now.getMinutes();

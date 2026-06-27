@@ -4,6 +4,8 @@ import { CancelModal } from '../components/CancelModal';
 import { fetchAllReservations, fetchFranjas, cancelReservation } from '../lib/izar4Client';
 import { getDeviceSecret } from '../lib/deviceSecret';
 import { listBookings, markCancelled, type BookingRecord } from '../lib/bookingsDb';
+import { addRecentAction } from '../lib/recentActions';
+import { syncRegistration } from '../lib/pushClient';
 import { isMine } from '../lib/mine';
 import { dateToYmd, ymdToDate } from '../lib/dates';
 import type { Profile } from '../lib/profile';
@@ -45,6 +47,7 @@ export function MyBookingsScreen({ profile }: { profile: Profile }) {
     const r = await cancelReservation(secret, res.id, codigo);
     if (!r.ok) return false;
     await markCancelled(res.fecha, res.slot, Date.now());
+    addRecentAction(res.fecha, res.slot); void syncRegistration();
     setCancelRow(null);
     await load();
     return true;
