@@ -12,7 +12,7 @@ import { dateToYmd, ymdToDate } from '../lib/dates';
 import type { Profile } from '../lib/profile';
 import type { Franja, Reservation, SlotView } from '../lib/types';
 
-export function MyBookingsScreen({ profile }: { profile: Profile }) {
+export function MyBookingsScreen({ profile, onOpenSlot }: { profile: Profile; onOpenSlot: (fecha: string, slot: string) => void }) {
   const { t, i18n } = useTranslation();
   const today = dateToYmd(new Date());
   const secret = getDeviceSecret();
@@ -74,7 +74,7 @@ export function MyBookingsScreen({ profile }: { profile: Profile }) {
           const dateStr = new Intl.DateTimeFormat(i18n.language, { weekday: 'short', day: 'numeric', month: 'short' }).format(d);
           return (
             <div key={`${res.fecha}|${res.slot}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 8px', borderBottom: '1px solid #141d2a' }}>
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => onOpenSlot(res.fecha, res.slot)}>
                 <div style={{ fontSize: 13.5, fontWeight: 700, color: '#eaf2fc' }}>{dateStr} · {franja.start}–{franja.end}</div>
                 <div style={{ fontSize: 10.5, color: '#8aa0bd', marginTop: 4 }}>{originLabel(origin)}</div>
               </div>

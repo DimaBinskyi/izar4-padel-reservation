@@ -93,11 +93,6 @@ export function SettingsScreen({ profile, onProfileSaved }: { profile: Profile; 
 
       <div style={label}>{t('settings.version')}</div>
       <div style={group}>
-        <div style={item}>
-          <span>{t('settings.install')}</span>
-          <button onClick={() => { localStorage.removeItem('padel_install_dismissed'); localStorage.removeItem('padel_visits'); alert(t('install.banner')); }}
-            style={{ border: 'none', background: 'transparent', color: '#86b7ff', fontSize: 12.5 }}>{t('settings.install')} ›</button>
-        </div>
         <div style={{ ...item, borderBottom: 'none' }}><span>{t('settings.version')}</span><b>{APP_VERSION}</b></div>
       </div>
 
