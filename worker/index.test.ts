@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import worker from './index';
 
-const ENV = { DEVICE_SECRET: 's3cret', ASSETS: { fetch: async () => new Response('asset') } } as any;
+const ENV = { DEVICE_SECRET: 's3cret', VAPID_PUBLIC: 'p', VAPID_PRIVATE: 'k', VAPID_SUBJECT: 'mailto:x', KV: {} as any, ASSETS: { fetch: async () => new Response('asset') } } as any;
 
 beforeEach(() => vi.restoreAllMocks());
 
