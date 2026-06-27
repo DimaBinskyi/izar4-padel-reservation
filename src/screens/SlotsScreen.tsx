@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DateStrip } from '../components/DateStrip';
 import { SlotRow } from '../components/SlotRow';
@@ -29,20 +29,22 @@ interface SlotsScreenProps {
   onFocusConsumed?: () => void;
 }
 
+const SLIDE = 'transform .32s cubic-bezier(.22,.61,.36,1)';
+
 export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps = {}) {
   const { t } = useTranslation();
   const today = dateToYmd(new Date());
   const maxYmd = addDays(today, CALENDAR_DAYS - 1);
   const [selected, setSelected] = useState(today);
 
-  // All data is fetched once (reservations for all dates come from the cron snapshot), so adjacent
-  // days are already available to render during a swipe. We re-fetch (silently) on each day change.
+  // All data is fetched up front (reservations for every date come from the cron snapshot), so the
+  // adjacent day-pages are already available during a swipe. We re-fetch (silently) on each change.
   const [allRes, setAllRes] = useState<Reservation[]>([]);
   const [franjas, setFranjas] = useState<Franja[]>([]);
   const [weekdayBlocks, setWeekdayBlocks] = useState<WeekdayBlockSet>({});
   const [dayBlocks, setDayBlocks] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const ready = franjas.length > 0;   // first load finished → pages have data to show
 
   const [profile, setProfile] = useState<Profile | null>(loadProfile());
   const [editingProfile, setEditingProfile] = useState(false);
@@ -51,19 +53,16 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
   const [watchOpen, setWatchOpen] = useState(false);
   const [highlightSlot, setHighlightSlot] = useState<string | null>(null);
 
-  // Carousel drag state.
+  // Carousel: the track is driven imperatively (no setState per touchmove) for a smooth full slide.
   const viewportRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
-  const dragXRef = useRef(0);   // authoritative during a gesture (state can be stale in the end handler)
-  const [dragX, setDragX] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const [instant, setInstant] = useState(false);   // disable transition for the post-slide recenter
+  const dragXRef = useRef(0);
 
   const secret = getDeviceSecret();
   const needProfile = !isProfileComplete(profile);
 
-  const load = useCallback(async (silent = false, live = false) => {
-    if (!silent) setLoading(true);
+  const load = useCallback(async (live = false) => {
     setError(null);
     try {
       const f = await fetchFranjas(secret);          // session-cached
@@ -71,20 +70,29 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
       const all = applyOverrides(await fetchAllReservations(secret, live));
       const db = await fetchDayBlocks(secret);        // worker-cached
       setFranjas(f); setWeekdayBlocks(wb); setAllRes(all); setDayBlocks(db);
-    } catch { setError(t('slots.error')); } finally { setLoading(false); }
+    } catch { setError(t('slots.error')); }
   }, [secret, t]);
 
   useEffect(() => { void load(); }, [load]);
 
   // Jump to a slot (from My bookings): switch date, refresh, then blink it for 3s.
   useEffect(() => {
-    if (focus) { setSelected(focus.fecha); setHighlightSlot(focus.slot); void load(true, true); onFocusConsumed?.(); }
+    if (focus) { setSelected(focus.fecha); setHighlightSlot(focus.slot); void load(true); onFocusConsumed?.(); }
   }, [focus, onFocusConsumed, load]);
   useEffect(() => {
     if (!highlightSlot) return;
     const id = window.setTimeout(() => setHighlightSlot(null), 3000);
     return () => window.clearTimeout(id);
   }, [highlightSlot]);
+
+  // Center the track on the selected day (instantly) whenever the day changes or on first render.
+  function setTrack(px: number, animate: boolean) {
+    const el = trackRef.current;
+    if (!el) return;
+    el.style.transition = animate ? SLIDE : 'none';
+    el.style.transform = `translateX(calc(-100% + ${px}px))`;
+  }
+  useLayoutEffect(() => { setTrack(0, false); }, [selected, ready]);
 
   const remaining = profile ? weeklyRemaining(allRes, profile.vivienda, selected, WEEKLY_LIMIT) : WEEKLY_LIMIT;
   const beyondHorizon = selected > addDays(today, BOOKING_HORIZON_DAYS);
@@ -93,33 +101,30 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     if (d < today || d > maxYmd) return;
     setSelected(d);
     setHighlightSlot(null);
-    void load(true, true);  // refresh on transition
+    void load(true);  // refresh on transition
   }
 
-  // ── Carousel touch handlers ──
+  // ── Carousel touch handlers (imperative track for smoothness) ──
   function onTouchStart(e: React.TouchEvent) {
     const tp = e.touches[0];
     dragStart.current = { x: tp.clientX, y: tp.clientY };
     dragXRef.current = 0;
-    setInstant(false);
-    setDragging(true);
   }
   function onTouchMove(e: React.TouchEvent) {
     const s = dragStart.current;
     if (!s) return;
     const tp = e.touches[0];
     const dx = tp.clientX - s.x, dy = tp.clientY - s.y;
-    if (Math.abs(dx) < Math.abs(dy)) return;             // vertical gesture → let it scroll
+    if (Math.abs(dx) < Math.abs(dy)) return;             // vertical → let it scroll
     const atStart = selected <= today && dx > 0;
     const atEnd = selected >= maxYmd && dx < 0;
     const d = atStart || atEnd ? dx * 0.3 : dx;          // rubber-band at the ends
     dragXRef.current = d;
-    setDragX(d);
+    setTrack(d, false);
   }
   function onTouchEnd() {
     const had = dragStart.current;
     dragStart.current = null;
-    setDragging(false);
     if (!had) return;
     const W = viewportRef.current?.clientWidth ?? 360;
     const dx = dragXRef.current;
@@ -127,16 +132,12 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     const threshold = Math.min(80, W * 0.22);
     const dir = dx < 0 ? 1 : -1;
     const target = addDays(selected, dir);
-    if (Math.abs(dx) < threshold || target < today || target > maxYmd) { setDragX(0); return; }
-    setDragX(dir < 0 ? -W : W);   // animate the full slide
+    if (Math.abs(dx) < threshold || target < today || target > maxYmd) { setTrack(0, true); return; }
+    setTrack(dir < 0 ? -W : W, true);   // slide the full page out
     window.setTimeout(() => {
-      setInstant(true);
-      setSelected(target);
-      setHighlightSlot(null);
-      setDragX(0);
-      void load(true, true);      // re-fetch to refresh after the transition
-      requestAnimationFrame(() => requestAnimationFrame(() => setInstant(false)));
-    }, 260);
+      setSelected(target);              // useLayoutEffect recenters instantly on the new day
+      void load(true);                  // re-fetch to refresh after the transition
+    }, 320);
   }
 
   async function doBook(slot: SlotView) {
@@ -153,7 +154,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     addRecentAction(selected, slot.franja.slot);
     addOverride({ key: bookingKey(selected, slot.franja.slot), type: 'add', res: { id: r.id ?? 0, slot: slot.franja.slot, fecha: selected, nombre: profile.nombre, vivienda: profile.vivienda.toUpperCase() } });
     void syncRegistration();
-    await load(true, true);
+    await load(true);
     setBookSlot(null);
   }
 
@@ -165,7 +166,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     addRecentAction(selected, slot.franja.slot);
     addOverride({ key: bookingKey(selected, slot.franja.slot), type: 'remove' });
     void syncRegistration();
-    await load(true, true);
+    await load(true);
     setCancelSlot(null);
     return true;
   }
@@ -179,10 +180,13 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
   }
 
   function renderDay(date: string) {
-    const interactive = date === selected;
+    if (!ready) {
+      return <div style={{ display: 'flex', justifyContent: 'center', padding: '32px 0', color: '#8aa0bd' }}><Spinner /></div>;
+    }
     if (dayBlocks[date] !== undefined) {
       return <div style={{ padding: 16, color: '#f2c14e' }}>{dayBlocks[date] || t('slots.dayBlocked')}</div>;
     }
+    const interactive = date === selected;
     const daySlots = deriveSlots({
       fecha: date, franjas, reservations: allRes.filter((r) => r.fecha === date),
       weekdayBlocks, dayBlocked: false, now: new Date(),
@@ -219,17 +223,12 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
 
       <DateStrip todayYmd={today} selected={selected} onSelect={goToDate} />
 
-      {error && <div style={{ padding: 16, color: '#ff9b9b' }}>{error}</div>}
-      {loading && !error && <div style={{ padding: 16, color: '#8aa0bd', display: 'flex', gap: 8, alignItems: 'center' }}><Spinner /> {t('slots.loading')}</div>}
-
-      {!loading && !error && (
+      {error ? (
+        <div style={{ padding: 16, color: '#ff9b9b' }}>{error}</div>
+      ) : (
         <div ref={viewportRef} style={{ overflow: 'hidden', minHeight: '60vh' }}
           onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-          <div style={{
-            display: 'flex',
-            transform: `translateX(calc(-100% + ${dragX}px))`,
-            transition: dragging || instant ? 'none' : 'transform .26s ease',
-          }}>
+          <div ref={trackRef} style={{ display: 'flex', willChange: 'transform' }}>
             {days.map((date) => (
               <div key={date} style={{ flex: '0 0 100%', padding: '2px 10px 8px' }}>{renderDay(date)}</div>
             ))}
