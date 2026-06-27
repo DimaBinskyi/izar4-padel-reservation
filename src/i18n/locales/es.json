@@ -53,5 +53,6 @@
     "installTitle": "Añade a pantalla de inicio", "installBody": "En iPhone las notificaciones solo funcionan en la app instalada.",
     "enableTitle": "Activar notificaciones", "enableBody": "Para capturar pistas libres y ver capturas automáticas.",
     "enableCta": "Activar", "deniedTitle": "Notificaciones desactivadas", "deniedBody": "Actívalas en Ajustes del teléfono → app → Notificaciones.",
-    "recheck": "Comprobar de nuevo", "onTitle": "Notificaciones activas ✓", "unsupportedTitle": "Este dispositivo no admite web push" }
+    "recheck": "Comprobar de nuevo", "onTitle": "Notificaciones activas ✓", "unsupportedTitle": "Este dispositivo no admite web push" },
+  "watch": { "title": "Captura", "newTitle": "Nueva captura", "from": "Desde", "to": "Hasta", "preview": "Capturaré {{n}} turnos:", "add": "Añadir captura", "active": "Capturas activas", "none": "Sin capturas activas", "remove": "Quitar", "watchSlot": "Capturar" }
 }

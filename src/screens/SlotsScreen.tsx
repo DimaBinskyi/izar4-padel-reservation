@@ -5,6 +5,7 @@ import { SlotRow } from '../components/SlotRow';
 import { ProfileModal } from '../components/ProfileModal';
 import { BookingModal } from '../components/BookingModal';
 import { CancelModal } from '../components/CancelModal';
+import { WatchSheet } from '../components/WatchSheet';
 import { deriveSlots } from '../lib/status';
 import {
   fetchFranjas, fetchReservations, fetchAllReservations, fetchWeekdayBlocks, fetchDayBlock,
@@ -17,7 +18,7 @@ import { isMine } from '../lib/mine';
 import { countDay, weeklyRemaining, countWeek } from '../lib/limits';
 import { recordBooking, markCancelled, bookingKey } from '../lib/bookingsDb';
 import { WEEKLY_LIMIT, DAILY_LIMIT, BOOKING_HORIZON_DAYS } from '../config';
-import type { Reservation, SlotView } from '../lib/types';
+import type { Franja, Reservation, SlotView } from '../lib/types';
 
 export function SlotsScreen() {
   const { t } = useTranslation();
@@ -31,6 +32,8 @@ export function SlotsScreen() {
   const [editingProfile, setEditingProfile] = useState(false);
   const [bookSlot, setBookSlot] = useState<SlotView | null>(null);
   const [cancelSlot, setCancelSlot] = useState<SlotView | null>(null);
+  const [franjas, setFranjas] = useState<Franja[]>([]);
+  const [watchOpen, setWatchOpen] = useState(false);
 
   const secret = getDeviceSecret();
   const needProfile = !isProfileComplete(profile);
@@ -39,7 +42,7 @@ export function SlotsScreen() {
     if (!silent) setSlots(null);
     setError(null); setBlockedMsg(null);
     try {
-      const [franjas, reservations, allReservations, weekdayBlocks, dayBlock] = await Promise.all([
+      const [franjasFetched, reservations, allReservations, weekdayBlocks, dayBlock] = await Promise.all([
         fetchFranjas(secret),
         fetchReservations(secret, selected),
         fetchAllReservations(secret),
@@ -47,8 +50,9 @@ export function SlotsScreen() {
         fetchDayBlock(secret, selected),
       ]);
       setAllRes(allReservations);
+      setFranjas(franjasFetched);
       if (dayBlock) { setBlockedMsg(dayBlock.motivo || t('slots.dayBlocked')); setSlots([]); return; }
-      setSlots(deriveSlots({ fecha: selected, franjas, reservations, weekdayBlocks, dayBlocked: false, now: new Date() }));
+      setSlots(deriveSlots({ fecha: selected, franjas: franjasFetched, reservations, weekdayBlocks, dayBlocked: false, now: new Date() }));
     } catch { setError(t('slots.error')); }
   }, [secret, selected, t]);
 
@@ -99,7 +103,8 @@ export function SlotsScreen() {
   return (
     <div style={{ maxWidth: 420, margin: '0 auto' }}>
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px' }}>
-        <span style={{ width: 30 }} />
+        <button aria-label="watch" onClick={() => setWatchOpen(true)}
+          style={{ height: 30, padding: '0 9px', borderRadius: 8, border: 'none', background: '#16202e', color: '#f2c14e', fontSize: 12.5 }}>🎯 {t('watch.title')}</button>
         <span style={{ fontSize: 17, fontWeight: 700 }}>{t('app.title')}</span>
         <button aria-label="profile" onClick={() => setEditingProfile(true)}
           style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#16202e', color: '#cfe0f5' }}>⚙️</button>
@@ -126,7 +131,7 @@ export function SlotsScreen() {
           <SlotRow key={s.franja.slot} slot={s}
             mine={!!(s.reservation && profile && isMine(s.reservation, profile))}
             canBook={!beyondHorizon}
-            onBook={() => tryBook(s)} onCancel={() => setCancelSlot(s)} />
+            onBook={() => tryBook(s)} onCancel={() => setCancelSlot(s)} onWatch={() => setWatchOpen(true)} />
         ))}
       </div>
 
@@ -144,6 +149,7 @@ export function SlotsScreen() {
         <CancelModal slot={cancelSlot} fecha={selected} profile={profile}
           onConfirm={(codigo) => doCancel(cancelSlot, codigo)} onClose={() => setCancelSlot(null)} />
       )}
+      {watchOpen && <WatchSheet fecha={selected} franjas={franjas} onClose={() => setWatchOpen(false)} />}
     </div>
   );
 }

@@ -16,9 +16,10 @@ interface Props {
   canBook: boolean;       // false when the date is beyond the booking horizon (view-only)
   onBook: () => void;     // for free slots
   onCancel: () => void;   // for own slots
+  onWatch: () => void;    // for busy slots that aren't mine
 }
 
-export function SlotRow({ slot, mine, canBook, onBook, onCancel }: Props) {
+export function SlotRow({ slot, mine, canBook, onBook, onCancel, onWatch }: Props) {
   const { t } = useTranslation();
   const badgeKey = mine && slot.status === 'ocupado' ? 'mine' : slot.status;
   const c = BADGE[badgeKey];
@@ -46,6 +47,10 @@ export function SlotRow({ slot, mine, canBook, onBook, onCancel }: Props) {
         {slot.status === 'ocupado' && mine && (
           <button onClick={onCancel} aria-label="cancel"
             style={{ width: 34, height: 34, borderRadius: 10, border: 'none', background: '#3a1620', color: '#ff8a8a', fontSize: 17, fontWeight: 700 }}>×</button>
+        )}
+        {slot.status === 'ocupado' && !mine && (
+          <button onClick={onWatch} aria-label="watch"
+            style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid #4a3a12', background: '#221a06', color: '#f2c14e', fontSize: 15 }}>🎯</button>
         )}
       </div>
     </div>
