@@ -9,16 +9,22 @@ function get(path: string, secret: string): Promise<Response> {
   });
 }
 
+// Static-ish data (franjas, weekday blocks, dwellings) rarely changes — cache per session to
+// avoid re-hitting izar4 (whose WAF throttles concurrent bursts) on every screen load.
+let _franjasCache: Franja[] | null = null;
+
 export async function fetchFranjas(secret: string): Promise<Franja[]> {
+  if (_franjasCache) return _franjasCache;
   const r = await get(`/wp/v2/franjas?per_page=100&recurso=${PADEL_TERM_ID}&_fields=id,slug,title,acf`, secret);
   const data = (await r.json()) as any[];
-  return data.map((f) => ({
+  _franjasCache = data.map((f) => ({
     id: Number(f.id),
     slot: f.title?.rendered ?? f.slug,
     start: (f.acf?.hora_inicio_franjas ?? '--:--').slice(0, 5),
     end: (f.acf?.hora_fin_franjas ?? '--:--').slice(0, 5),
     order: Number(f.acf?.orden_franjas ?? 999),
   }));
+  return _franjasCache;
 }
 
 export async function fetchReservations(secret: string, fecha: string): Promise<Reservation[]> {
@@ -35,7 +41,10 @@ export async function fetchReservations(secret: string, fecha: string): Promise<
     }));
 }
 
+let _blocksCache: WeekdayBlockSet | null = null;
+
 export async function fetchWeekdayBlocks(secret: string): Promise<WeekdayBlockSet> {
+  if (_blocksCache) return _blocksCache;
   const r = await get(`/wp/v2/bloqueos?per_page=100&recurso=${PADEL_TERM_ID}&_fields=id,acf`, secret);
   const data = (await r.json()) as any[];
   const set: WeekdayBlockSet = {};
@@ -44,6 +53,7 @@ export async function fetchWeekdayBlocks(secret: string): Promise<WeekdayBlockSe
     const dia = b.acf?.dia_semana_bloqueos;
     if (slot && dia) set[`${slot}_${dia}`] = true;
   }
+  _blocksCache = set;
   return set;
 }
 
@@ -54,12 +64,16 @@ export async function fetchDayBlock(secret: string, fecha: string): Promise<DayB
   return hit ? { motivo: hit.acf['motivo_bloqueos-fecha'] ?? '' } : null;
 }
 
+let _inmueblesCache: string[] | null = null;
+
 export async function fetchInmuebles(secret: string): Promise<string[]> {
+  if (_inmueblesCache) return _inmueblesCache;
   const r = await fetch(`${APP_API_BASE}/inmuebles?tipo=vivienda`, {
     headers: { 'x-device-secret': secret }, cache: 'no-store',
   });
   const d = (await r.json()) as { ok?: boolean; inmuebles?: { label: string }[] };
-  return d.ok && d.inmuebles ? d.inmuebles.map((i) => i.label) : [];
+  _inmueblesCache = d.ok && d.inmuebles ? d.inmuebles.map((i) => i.label) : [];
+  return _inmueblesCache;
 }
 
 export interface CreateInput {
@@ -104,6 +118,13 @@ export async function fetchReservationCode(secret: string, idReserva: number): P
   });
   const d = (await r.json().catch(() => ({}))) as { acf?: { codigo_cancelacion_reservas?: string } };
   return d.acf?.codigo_cancelacion_reservas ?? '';
+}
+
+/** Test helper: clear the session caches so each test starts fresh. */
+export function resetClientCaches(): void {
+  _franjasCache = null;
+  _blocksCache = null;
+  _inmueblesCache = null;
 }
 
 export async function fetchAllReservations(secret: string): Promise<Reservation[]> {

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fetchFranjas, fetchReservations } from './izar4Client';
+import { fetchFranjas, fetchReservations, resetClientCaches } from './izar4Client';
 
-beforeEach(() => vi.restoreAllMocks());
+beforeEach(() => { vi.restoreAllMocks(); resetClientCaches(); });
 
 function mockJson(data: unknown) {
   return vi.spyOn(globalThis, 'fetch').mockResolvedValue(
