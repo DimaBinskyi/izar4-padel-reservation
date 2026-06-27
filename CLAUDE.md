@@ -59,7 +59,16 @@ the community's production system.
 ## Deploy (all free, one Cloudflare account)
 Single Worker (Static Assets) serves the built PWA + `/api/*` + cron; KV namespace for state;
 VAPID keypair (public in PWA, private as a Worker secret). Deployed via `wrangler`.
-(Concrete build/deploy commands are added to this file as the code lands.)
+
+## Commands
+- `npm install` — install deps.
+- `npm test` — run the Vitest suite (`npx vitest run`).
+- `npm run dev` — Vite dev server (proxies `/api` → `http://localhost:8787`).
+- `npm run worker:dev` — run the Worker locally (`wrangler dev`, serves `/api`, reads `.dev.vars`).
+- `npm run build` — `tsc --noEmit && vite build` → `dist/` (PWA: `manifest.webmanifest` + `sw.js`).
+- `npm run worker:deploy` — `wrangler deploy` (needs `wrangler login` + `wrangler secret put DEVICE_SECRET`).
+- Local dev auth: set the device secret in the browser to match `.dev.vars`:
+  `localStorage.setItem('padel_device_secret','dev-local-secret')`.
 
 ## Constraints to respect
 Free only (no Apple Developer, no paid host/domain). One small free cloud component is OK — keep
