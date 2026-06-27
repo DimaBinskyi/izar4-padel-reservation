@@ -43,6 +43,7 @@ worker/      Cloudflare Worker — KV + Cron + Web Push (VAPID)      (added duri
   creation) so cancel works after the profile code changes. **Never display or harvest other
   users' codes**; for unknown bookings, require the correct code (proof of ownership).
 - **Calendar:** month view, min day = today; days beyond the 21-day horizon are view-only.
+- **Touch/drag handlers** read the offset from a `useRef` (React state is stale within one synchronous gesture); the carousel drives the track `transform` imperatively (no setState per `touchmove`).
 
 ## izar4 gotchas (see docs/API.md §4)
 - Call izar4 **only through the Worker proxy** — direct browser calls fail CORS.
@@ -50,6 +51,9 @@ worker/      Cloudflare Worker — KV + Cron + Web Push (VAPID)      (added duri
   cache-busting + optimistic UI + reconcile on next poll.
 - Server ignores its own rule limits (7-day / 3-week / 1-day) — verified by testing.
 - Date formats vary (`YYYYMMDD` vs `dd/mm/yyyy`); weekday codes `D L M X J V S` (Sun=0).
+- izar4's WAF **503s on concurrent request bursts** → the client loads sequentially + session-caches static data (franjas/blocks/inmuebles); the Worker proxy retries 503 and KV-caches static GETs.
+- Reservations come from the cron-maintained KV **snapshot** via `GET /api/reservas` (~80ms vs 0.5–6s direct); `?live=1` forces a fresh fetch (used right after a write).
+- The Worker proxy's cacheable-path check matches the full path `/wp-json/wp/v2/...` (NOT `/wp/v2/...`) — a mismatch silently disables caching.
 
 ## Testing rule (IMPORTANT)
 Any live test against izar4 that **creates** a reservation MUST **cancel it immediately** and
@@ -69,6 +73,24 @@ VAPID keypair (public in PWA, private as a Worker secret). Deployed via `wrangle
 - `npm run worker:deploy` — `wrangler deploy` (needs `wrangler login` + `wrangler secret put DEVICE_SECRET`).
 - Local dev auth: set the device secret in the browser to match `.dev.vars`:
   `localStorage.setItem('padel_device_secret','dev-local-secret')`.
+
+## Cloudflare / deploy gotchas
+- `wrangler deploy` does NOT build — run `npm run build` first (it uploads `dist/` + the worker).
+- The client bakes `VITE_VAPID_PUBLIC` + `VITE_DEVICE_SECRET` at build time; redeploy with both set, and `VITE_DEVICE_SECRET` MUST equal the Worker `DEVICE_SECRET` secret or the PWA gets 401 / no push. Deploy: `VITE_VAPID_PUBLIC=… VITE_DEVICE_SECRET=… npm run build && npm run worker:deploy`.
+- A new `*.workers.dev` subdomain needs a one-time interactive registration (user runs `wrangler deploy`) and its TLS cert takes a few min (`ERR_SSL_VERSION_OR_CIPHER_MISMATCH` / curl exit 35 until ready).
+- **KV is eventually-consistent** — never rely on read-after-write; the client uses `src/lib/overrides.ts` (optimistic, self-healing) so counter/slots are correct immediately after a book/cancel.
+- Live: https://izar4-padel.dimabinskyi.workers.dev (Worker `izar4-padel`).
+
+## PWA / iOS gotchas
+- `index.html` must keep `apple-mobile-web-app-capable` + `apple-touch-icon` (else iOS "Add to Home Screen" = Safari shortcut: no standalone, no push).
+- iOS caches the home-screen icon at install — changing it requires deleting + re-adding the app.
+- Global 16px inputs + viewport `user-scalable=no` stop iOS focus-zoom — keep both.
+- vite-plugin-pwa `autoUpdate` serves the OLD bundle on the first load after a deploy — clear the SW (or relaunch) to verify a deploy.
+
+## Verifying changes live
+- Verify against the deployed URL with the Playwright MCP browser, not only unit tests. Clear SW+caches between checks (`navigator.serviceWorker.getRegistrations()…unregister()` + `caches.keys()…delete`).
+- Hit `/api/*` from the shell: `curl -H "x-device-secret: <DEVICE_SECRET>" …`.
+- Simulate gestures by dispatching `TouchEvent` with `new Touch({...})` (touchstart→touchmove→touchend).
 
 ## Constraints to respect
 Free only (no Apple Developer, no paid host/domain). One small free cloud component is OK — keep
