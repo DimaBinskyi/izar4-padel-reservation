@@ -127,16 +127,20 @@ export function resetClientCaches(): void {
   _inmueblesCache = null;
 }
 
-export async function fetchAllReservations(secret: string): Promise<Reservation[]> {
-  const r = await get(`/wp/v2/reservas?per_page=100&recurso=${PADEL_TERM_ID}&_fields=id,slug,acf`, secret);
+// Reads from the Worker's cron-maintained KV snapshot (fast). Pass live=true to force a fresh
+// fetch (used right after a booking/cancel). Snapshot items are already {id,fecha,slot,vivienda,nombre}.
+export async function fetchAllReservations(secret: string, live = false): Promise<Reservation[]> {
+  const r = await fetch(`/api/reservas?live=${live ? '1' : '0'}`, {
+    headers: { 'x-device-secret': secret }, cache: 'no-store',
+  });
   const data = (await r.json()) as any[];
   return data
-    .filter((x) => x.acf && x.acf.fecha_reservas)
+    .filter((x) => x && x.fecha && x.slot)
     .map((x) => ({
       id: Number(x.id),
-      slot: x.acf.id_franja_reservas,
-      fecha: normalizeYmd(x.acf.fecha_reservas),
-      nombre: x.acf.nombre_reservas ?? '',
-      vivienda: x.acf.vivienda_reservas ?? '',
+      slot: x.slot,
+      fecha: String(x.fecha),
+      nombre: x.nombre ?? '',
+      vivienda: x.vivienda ?? '',
     }));
 }

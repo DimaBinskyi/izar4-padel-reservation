@@ -55,11 +55,29 @@ export default {
         return json({ grabbed: raw ? JSON.parse(raw) : [] });
       }
 
+      // Reservations served from the cron-maintained KV snapshot (fast). `?live=1` forces a fresh
+      // paginated fetch (used right after a booking/cancel to reconcile the read-after-write lag).
+      if (url.pathname === '/api/reservas' && req.method === 'GET') {
+        if (url.searchParams.get('live') !== '1') {
+          const snap = await env.KV.get('snapshot');
+          if (snap) return proxied(snap);
+        }
+        const reservas = await fetchReservasPaged();
+        await env.KV.put('snapshot', JSON.stringify(reservas));
+        return proxied(JSON.stringify(reservas));
+      }
+
       // default: proxy to izar4. izar4's WAF 503s on concurrent bursts, so retry on 503,
       // and short-cache static-ish GETs in KV so warm loads barely touch the origin.
-      const path = url.pathname.replace(/^\/api/, '');
-      const isCacheableGet = req.method === 'GET' &&
-        ['/wp/v2/franjas', '/wp/v2/bloqueos', '/wp/v2/bloqueos-fecha', '/app/v1/inmuebles'].some((p) => path.startsWith(p));
+      const path = url.pathname.replace(/^\/api/, '');   // e.g. "/wp-json/wp/v2/franjas"
+      // Cache static-ish GETs in KV. Franjas/blocks/dwellings change ~never → 1 day; date-blocks → 5 min.
+      // (Check bloqueos-fecha before bloqueos, since the former startsWith the latter's prefix.)
+      let cacheTtl = 0;
+      if (req.method === 'GET') {
+        if (path.startsWith('/wp-json/wp/v2/bloqueos-fecha')) cacheTtl = 300;
+        else if (['/wp-json/wp/v2/franjas', '/wp-json/wp/v2/bloqueos', '/wp-json/app/v1/inmuebles'].some((p) => path.startsWith(p))) cacheTtl = 86400;
+      }
+      const isCacheableGet = cacheTtl > 0;
       const cacheKey = `cache:${path}${url.search}`;
       if (isCacheableGet) {
         const hit = await env.KV.get(cacheKey);
@@ -73,7 +91,7 @@ export default {
       });
       if (isCacheableGet && upstream.ok) {
         const text = await upstream.text();
-        await env.KV.put(cacheKey, text, { expirationTtl: 60 });
+        await env.KV.put(cacheKey, text, { expirationTtl: cacheTtl });
         return proxied(text);
       }
       const headers = new Headers(upstream.headers);
@@ -121,24 +139,36 @@ async function izar4Fetch(target: string, init: RequestInit): Promise<Response> 
   return last ?? new Response('upstream error', { status: 502 });
 }
 
+interface Resv { id: number; fecha: string; slot: string; vivienda: string; nombre: string }
+
+// Paginated fetch of all padel reservations from izar4 (with retry). Used by the cron and the
+// /api/reservas?live=1 endpoint; the result is stored as the KV 'snapshot' for fast reads.
+async function fetchReservasPaged(): Promise<Resv[]> {
+  const raw: any[] = [];
+  for (let page = 1; page <= 5; page++) {
+    const res = await izar4Fetch(`${IZAR4}/wp-json/wp/v2/reservas?per_page=100&page=${page}&recurso=${TERM}&_fields=id,acf`,
+      { method: 'GET', headers: { 'content-type': 'application/json' } });
+    if (!res.ok) break;
+    const arr = (await res.json()) as any[];
+    raw.push(...arr);
+    if (arr.length < 100) break;
+  }
+  return raw.filter((r) => r.acf).map((r) => ({
+    id: Number(r.id),
+    fecha: String(r.acf.fecha_reservas).replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3$2$1'),
+    slot: r.acf.id_franja_reservas,
+    vivienda: r.acf.vivienda_reservas ?? '',
+    nombre: r.acf.nombre_reservas ?? '',
+  }));
+}
+
 async function runPoll(env: Env, now: Date): Promise<void> {
   // 1. fetch franjas (times) + reservations across the horizon
   const franjasRaw = await (await fetch(`${IZAR4}/wp-json/wp/v2/franjas?per_page=100&recurso=${TERM}&_fields=id,title,acf`, { cache: 'no-store' })).json() as any[];
   const franjas: FranjaMap = {};
   for (const f of franjasRaw) franjas[f.title?.rendered ?? ''] = { start: (f.acf?.hora_inicio_franjas ?? '00:00').slice(0, 5) };
 
-  const reservasRaw: any[] = [];
-  for (let page = 1; page <= 5; page++) {
-    const pageRes = await fetch(`${IZAR4}/wp-json/wp/v2/reservas?per_page=100&page=${page}&recurso=${TERM}&_fields=id,acf`, { cache: 'no-store' });
-    if (!pageRes.ok) break;
-    const arr = await pageRes.json() as any[];
-    reservasRaw.push(...arr);
-    if (arr.length < 100) break;
-  }
-  const reservas = reservasRaw.filter((r) => r.acf).map((r) => ({
-    fecha: String(r.acf.fecha_reservas).replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3$2$1'),
-    slot: r.acf.id_franja_reservas, vivienda: r.acf.vivienda_reservas ?? '', nombre: r.acf.nombre_reservas ?? '',
-  }));
+  const reservas = await fetchReservasPaged();
   const occupied = reservas.map((r) => `${r.fecha}|${r.slot}`);
 
   // 2. diff vs snapshot (snapshot stores full reservas with owners)

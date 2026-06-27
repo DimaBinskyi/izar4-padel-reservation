@@ -40,7 +40,7 @@ export function SlotsScreen() {
   const secret = getDeviceSecret();
   const needProfile = !isProfileComplete(profile);
 
-  const load = useCallback(async (silent = false) => {
+  const load = useCallback(async (silent = false, live = false) => {
     if (!silent) setSlots(null);
     setError(null); setBlockedMsg(null);
     try {
@@ -48,7 +48,7 @@ export function SlotsScreen() {
       // session-cached in the client, so warm loads only fetch reservations + the day block.
       const franjasFetched = await fetchFranjas(secret);
       const weekdayBlocks = await fetchWeekdayBlocks(secret);
-      const allReservations = await fetchAllReservations(secret);
+      const allReservations = await fetchAllReservations(secret, live);
       const dayBlock = await fetchDayBlock(secret, selected);
       setAllRes(allReservations);
       setFranjas(franjasFetched);
@@ -80,7 +80,7 @@ export function SlotsScreen() {
     setAllRes((prev) => [...prev, optimistic]);
     setSlots((prev) => prev?.map((s) => (s.franja.slot === slot.franja.slot ? { ...s, status: 'ocupado', reservation: optimistic } : s)) ?? prev);
     setBookSlot(null);
-    window.setTimeout(() => { void load(true); }, 2000);
+    window.setTimeout(() => { void load(true, true); }, 2000);
   }
 
   async function doCancel(slot: SlotView, codigo: string): Promise<boolean> {
@@ -92,7 +92,7 @@ export function SlotsScreen() {
     setAllRes((prev) => prev.filter((x) => !(x.fecha === selected && x.slot === slot.franja.slot)));
     setSlots((prev) => prev?.map((s) => (s.franja.slot === slot.franja.slot ? { ...s, status: 'libre', reservation: null } : s)) ?? prev);
     setCancelSlot(null);
-    window.setTimeout(() => { void load(true); }, 2000);
+    window.setTimeout(() => { void load(true, true); }, 2000);
     return true;
   }
 
