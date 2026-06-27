@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DateStrip } from '../components/DateStrip';
 import { SlotRow } from '../components/SlotRow';
@@ -21,7 +21,7 @@ import { recordBooking, markCancelled, bookingKey } from '../lib/bookingsDb';
 import { addRecentAction } from '../lib/recentActions';
 import { applyOverrides, addOverride } from '../lib/overrides';
 import { syncRegistration } from '../lib/pushClient';
-import { WEEKLY_LIMIT, DAILY_LIMIT, BOOKING_HORIZON_DAYS, CALENDAR_DAYS } from '../config';
+import { WEEKLY_LIMIT, DAILY_LIMIT, BOOKING_HORIZON_DAYS } from '../config';
 import type { Franja, Reservation, SlotView, WeekdayBlockSet } from '../lib/types';
 
 interface SlotsScreenProps {
@@ -29,22 +29,19 @@ interface SlotsScreenProps {
   onFocusConsumed?: () => void;
 }
 
-const SLIDE = 'transform .32s cubic-bezier(.22,.61,.36,1)';
-
 export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps = {}) {
   const { t } = useTranslation();
   const today = dateToYmd(new Date());
-  const maxYmd = addDays(today, CALENDAR_DAYS - 1);
   const [selected, setSelected] = useState(today);
 
-  // All data is fetched up front (reservations for every date come from the cron snapshot), so the
-  // adjacent day-pages are already available during a swipe. We re-fetch (silently) on each change.
+  // All data is fetched up front (reservations for every date come from the cron snapshot); the
+  // selected day's slots are derived from it. We re-fetch silently on each day change / write.
   const [allRes, setAllRes] = useState<Reservation[]>([]);
   const [franjas, setFranjas] = useState<Franja[]>([]);
   const [weekdayBlocks, setWeekdayBlocks] = useState<WeekdayBlockSet>({});
   const [dayBlocks, setDayBlocks] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
-  const ready = franjas.length > 0;   // first load finished → pages have data to show
+  const ready = franjas.length > 0;   // first load finished → real data to show
 
   const [profile, setProfile] = useState<Profile | null>(loadProfile());
   const [editingProfile, setEditingProfile] = useState(false);
@@ -52,12 +49,6 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
   const [cancelSlot, setCancelSlot] = useState<SlotView | null>(null);
   const [watchOpen, setWatchOpen] = useState(false);
   const [highlightSlot, setHighlightSlot] = useState<string | null>(null);
-
-  // Carousel: the track is driven imperatively (no setState per touchmove) for a smooth full slide.
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const trackRef = useRef<HTMLDivElement>(null);
-  const dragStart = useRef<{ x: number; y: number } | null>(null);
-  const dragXRef = useRef(0);
 
   const secret = getDeviceSecret();
   const needProfile = !isProfileComplete(profile);
@@ -85,59 +76,13 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     return () => window.clearTimeout(id);
   }, [highlightSlot]);
 
-  // Center the track on the selected day (instantly) whenever the day changes or on first render.
-  function setTrack(px: number, animate: boolean) {
-    const el = trackRef.current;
-    if (!el) return;
-    el.style.transition = animate ? SLIDE : 'none';
-    el.style.transform = `translateX(calc(-100% + ${px}px))`;
-  }
-  useLayoutEffect(() => { setTrack(0, false); }, [selected, ready]);
-
   const remaining = profile ? weeklyRemaining(allRes, profile.vivienda, selected, WEEKLY_LIMIT) : WEEKLY_LIMIT;
   const beyondHorizon = selected > addDays(today, BOOKING_HORIZON_DAYS);
 
   function goToDate(d: string) {
-    if (d < today || d > maxYmd) return;
     setSelected(d);
     setHighlightSlot(null);
-    void load(true);  // refresh on transition
-  }
-
-  // ── Carousel touch handlers (imperative track for smoothness) ──
-  function onTouchStart(e: React.TouchEvent) {
-    const tp = e.touches[0];
-    dragStart.current = { x: tp.clientX, y: tp.clientY };
-    dragXRef.current = 0;
-  }
-  function onTouchMove(e: React.TouchEvent) {
-    const s = dragStart.current;
-    if (!s) return;
-    const tp = e.touches[0];
-    const dx = tp.clientX - s.x, dy = tp.clientY - s.y;
-    if (Math.abs(dx) < Math.abs(dy)) return;             // vertical → let it scroll
-    const atStart = selected <= today && dx > 0;
-    const atEnd = selected >= maxYmd && dx < 0;
-    const d = atStart || atEnd ? dx * 0.3 : dx;          // rubber-band at the ends
-    dragXRef.current = d;
-    setTrack(d, false);
-  }
-  function onTouchEnd() {
-    const had = dragStart.current;
-    dragStart.current = null;
-    if (!had) return;
-    const W = viewportRef.current?.clientWidth ?? 360;
-    const dx = dragXRef.current;
-    dragXRef.current = 0;
-    const threshold = Math.min(80, W * 0.22);
-    const dir = dx < 0 ? 1 : -1;
-    const target = addDays(selected, dir);
-    if (Math.abs(dx) < threshold || target < today || target > maxYmd) { setTrack(0, true); return; }
-    setTrack(dir < 0 ? -W : W, true);   // slide the full page out
-    window.setTimeout(() => {
-      setSelected(target);              // useLayoutEffect recenters instantly on the new day
-      void load(true);                  // re-fetch to refresh after the transition
-    }, 320);
+    void load(true);  // refresh on day change
   }
 
   async function doBook(slot: SlotView) {
@@ -179,30 +124,9 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     setBookSlot(slot);
   }
 
-  function renderDay(date: string) {
-    if (!ready) {
-      return <div style={{ display: 'flex', justifyContent: 'center', padding: '32px 0', color: '#8aa0bd' }}><Spinner /></div>;
-    }
-    if (dayBlocks[date] !== undefined) {
-      return <div style={{ padding: 16, color: '#f2c14e' }}>{dayBlocks[date] || t('slots.dayBlocked')}</div>;
-    }
-    const interactive = date === selected;
-    const daySlots = deriveSlots({
-      fecha: date, franjas, reservations: allRes.filter((r) => r.fecha === date),
-      weekdayBlocks, dayBlocked: false, now: new Date(),
-    });
-    return daySlots.map((s) => (
-      <SlotRow key={s.franja.slot} slot={s}
-        mine={!!(s.reservation && profile && isMine(s.reservation, profile))}
-        canBook={interactive && date <= addDays(today, BOOKING_HORIZON_DAYS)}
-        highlight={interactive && highlightSlot === s.franja.slot}
-        onBook={() => { if (interactive) tryBook(s); }}
-        onCancel={() => { if (interactive) setCancelSlot(s); }}
-        onWatch={() => { if (interactive) setWatchOpen(true); }} />
-    ));
-  }
-
-  const days = [addDays(selected, -1), selected, addDays(selected, 1)];
+  const slots = ready
+    ? deriveSlots({ fecha: selected, franjas, reservations: allRes.filter((r) => r.fecha === selected), weekdayBlocks, dayBlocked: false, now: new Date() })
+    : [];
 
   return (
     <div style={{ maxWidth: 420, margin: '0 auto' }}>
@@ -223,18 +147,22 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
 
       <DateStrip todayYmd={today} selected={selected} onSelect={goToDate} />
 
-      {error ? (
-        <div style={{ padding: 16, color: '#ff9b9b' }}>{error}</div>
-      ) : (
-        <div ref={viewportRef} style={{ overflow: 'hidden', minHeight: '60vh' }}
-          onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-          <div ref={trackRef} style={{ display: 'flex', willChange: 'transform' }}>
-            {days.map((date) => (
-              <div key={date} style={{ flex: '0 0 100%', padding: '2px 10px 8px' }}>{renderDay(date)}</div>
-            ))}
-          </div>
-        </div>
-      )}
+      <div style={{ padding: '2px 10px 8px', minHeight: '60vh' }}>
+        {error && <div style={{ padding: 16, color: '#ff9b9b' }}>{error}</div>}
+        {!error && !ready && (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '32px 0', color: '#8aa0bd' }}><Spinner /></div>
+        )}
+        {!error && ready && dayBlocks[selected] !== undefined && (
+          <div style={{ padding: 16, color: '#f2c14e' }}>{dayBlocks[selected] || t('slots.dayBlocked')}</div>
+        )}
+        {!error && ready && dayBlocks[selected] === undefined && slots.map((s) => (
+          <SlotRow key={s.franja.slot} slot={s}
+            mine={!!(s.reservation && profile && isMine(s.reservation, profile))}
+            canBook={!beyondHorizon}
+            highlight={highlightSlot === s.franja.slot}
+            onBook={() => tryBook(s)} onCancel={() => setCancelSlot(s)} onWatch={() => setWatchOpen(true)} />
+        ))}
+      </div>
 
       {(needProfile || editingProfile) && (
         <ProfileModal initial={profile} mode={needProfile ? 'fill' : 'edit'}
