@@ -54,6 +54,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
   // Carousel drag state.
   const viewportRef = useRef<HTMLDivElement>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
+  const dragXRef = useRef(0);   // authoritative during a gesture (state can be stale in the end handler)
   const [dragX, setDragX] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [instant, setInstant] = useState(false);   // disable transition for the post-slide recenter
@@ -99,6 +100,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
   function onTouchStart(e: React.TouchEvent) {
     const tp = e.touches[0];
     dragStart.current = { x: tp.clientX, y: tp.clientY };
+    dragXRef.current = 0;
     setInstant(false);
     setDragging(true);
   }
@@ -110,7 +112,9 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     if (Math.abs(dx) < Math.abs(dy)) return;             // vertical gesture → let it scroll
     const atStart = selected <= today && dx > 0;
     const atEnd = selected >= maxYmd && dx < 0;
-    setDragX(atStart || atEnd ? dx * 0.3 : dx);          // rubber-band at the ends
+    const d = atStart || atEnd ? dx * 0.3 : dx;          // rubber-band at the ends
+    dragXRef.current = d;
+    setDragX(d);
   }
   function onTouchEnd() {
     const had = dragStart.current;
@@ -118,7 +122,8 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     setDragging(false);
     if (!had) return;
     const W = viewportRef.current?.clientWidth ?? 360;
-    const dx = dragX;
+    const dx = dragXRef.current;
+    dragXRef.current = 0;
     const threshold = Math.min(80, W * 0.22);
     const dir = dx < 0 ? 1 : -1;
     const target = addDays(selected, dir);
