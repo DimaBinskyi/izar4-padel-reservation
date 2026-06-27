@@ -34,5 +34,14 @@
     "enterCode": "Código de cancelación", "askCode": "El código de esta reserva no está guardado — introduce el código que usaste:",
     "wrongCode": "Código incorrecto. Inténtalo de nuevo.",
     "doCancel": "Cancelar reserva", "error": "Error al cancelar. Inténtalo de nuevo."
-  }
+  },
+  "nav": { "slots": "Turnos", "mybookings": "Mis reservas", "stats": "Estadísticas", "settings": "Ajustes" },
+  "mybookings": { "title": "Mis reservas", "empty": "No hay reservas próximas.", "subtitle": "Próximas · por Vivienda + nombre",
+    "originApp": "📱 en la app", "originAuto": "🎯 captura automática", "originIzar4": "🌐 en la web izar4", "cancel": "Cancelar" },
+  "stats": { "title": "Estadísticas", "week": "Semana", "month": "Mes", "all": "Todo", "custom": "Periodo",
+    "bookings": "reservas", "played": "jugadas", "cancelled": "canceladas", "upcoming": "próximas",
+    "favourite": "Turno favorito", "autoGrabbed": "Capturadas auto", "hours": "Horas en pista", "history": "Historial", "none": "—" },
+  "settings": { "title": "Ajustes", "profile": "Perfil", "language": "Idioma de la interfaz",
+    "limits": "Límites", "limitsValue": "3 por semana · 1 por día", "version": "Versión", "install": "Instalar app", "editProfile": "Editar perfil" },
+  "install": { "banner": "Instala la app para notificaciones y acceso rápido", "ios": "Pulsa Compartir → Añadir a pantalla de inicio", "cta": "Instalar", "later": "Más tarde" }
 }

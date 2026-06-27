@@ -34,5 +34,14 @@
     "enterCode": "Cancel code", "askCode": "This booking's code isn't saved — enter the code you booked with:",
     "wrongCode": "Wrong code. Try again.",
     "doCancel": "Cancel booking", "error": "Cancellation failed. Try again."
-  }
+  },
+  "nav": { "slots": "Slots", "mybookings": "My bookings", "stats": "Stats", "settings": "Settings" },
+  "mybookings": { "title": "My bookings", "empty": "No upcoming bookings.", "subtitle": "Upcoming · by Apartment + name",
+    "originApp": "📱 in app", "originAuto": "🎯 auto-grab", "originIzar4": "🌐 on izar4 site", "cancel": "Cancel" },
+  "stats": { "title": "Stats", "week": "Week", "month": "Month", "all": "All", "custom": "Range",
+    "bookings": "bookings", "played": "played", "cancelled": "cancelled", "upcoming": "upcoming",
+    "favourite": "Favourite slot", "autoGrabbed": "Auto-grabbed", "hours": "Hours on court", "history": "History", "none": "—" },
+  "settings": { "title": "Settings", "profile": "Profile", "language": "Interface language",
+    "limits": "Limits", "limitsValue": "3 per week · 1 per day", "version": "Version", "install": "Install app", "editProfile": "Edit profile" },
+  "install": { "banner": "Install the app for push and quick access", "ios": "Tap Share → Add to Home Screen", "cta": "Install", "later": "Later" }
 }
