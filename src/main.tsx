@@ -1,8 +1,14 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { registerSW } from 'virtual:pwa-register';
 import App from './App';
 import './i18n';
 import './styles.css';
+
+const updateSW = registerSW({ immediate: true });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') void updateSW();
+});
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
