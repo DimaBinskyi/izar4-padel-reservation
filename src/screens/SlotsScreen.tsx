@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DateStrip } from '../components/DateStrip';
 import { SlotRow } from '../components/SlotRow';
@@ -20,7 +20,7 @@ import { recordBooking, markCancelled, bookingKey } from '../lib/bookingsDb';
 import { addRecentAction } from '../lib/recentActions';
 import { applyOverrides, addOverride } from '../lib/overrides';
 import { syncRegistration } from '../lib/pushClient';
-import { WEEKLY_LIMIT, DAILY_LIMIT, BOOKING_HORIZON_DAYS } from '../config';
+import { WEEKLY_LIMIT, DAILY_LIMIT, BOOKING_HORIZON_DAYS, CALENDAR_DAYS } from '../config';
 import type { Franja, Reservation, SlotView } from '../lib/types';
 
 interface SlotsScreenProps {
@@ -79,6 +79,25 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
 
   const remaining = profile ? weeklyRemaining(allRes, profile.vivienda, selected, WEEKLY_LIMIT) : WEEKLY_LIMIT;
   const beyondHorizon = selected > addDays(today, BOOKING_HORIZON_DAYS);
+
+  // Swipe left/right on the slot list to move to the next/previous day (clamped to today … +1 month).
+  const touchRef = useRef<{ x: number; y: number } | null>(null);
+  const maxYmd = addDays(today, CALENDAR_DAYS - 1);
+  function shiftDay(dir: 1 | -1) {
+    setSelected((cur) => {
+      const next = addDays(cur, dir);
+      return next < today || next > maxYmd ? cur : next;
+    });
+  }
+  function onTouchStart(e: React.TouchEvent) { const tp = e.touches[0]; touchRef.current = { x: tp.clientX, y: tp.clientY }; }
+  function onTouchEnd(e: React.TouchEvent) {
+    const start = touchRef.current; touchRef.current = null;
+    if (!start) return;
+    const tp = e.changedTouches[0];
+    const dx = tp.clientX - start.x, dy = tp.clientY - start.y;
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return; // horizontal swipes only
+    shiftDay(dx < 0 ? 1 : -1);  // swipe left → next day, right → previous
+  }
 
   async function doBook(slot: SlotView) {
     if (!profile) return;
@@ -142,7 +161,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
 
       <DateStrip todayYmd={today} selected={selected} onSelect={setSelected} />
 
-      <div style={{ padding: '2px 10px 8px' }}>
+      <div style={{ padding: '2px 10px 8px', minHeight: '60vh' }} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         {error && <div style={{ padding: 16, color: '#ff9b9b' }}>{error}</div>}
         {blockedMsg && <div style={{ padding: 16, color: '#f2c14e' }}>{blockedMsg}</div>}
         {!error && !blockedMsg && slots === null && <div style={{ padding: 16, color: '#8aa0bd' }}>{t('slots.loading')}</div>}
