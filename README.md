@@ -11,11 +11,16 @@ paid server.
 > izar4 API (to avoid CORS).
 
 ## Status
-Design complete. See:
+**Built and deployed.** All phases implemented (PWA in `src/`, Cloudflare Worker in `worker/`),
+58 tests passing, live on Cloudflare.
+
+- **Live:** https://izar4-padel.dimabinskyi.workers.dev (install via Safari → Add to Home Screen)
 - **Design spec:** [`docs/superpowers/specs/2026-06-27-padel-reservas-design.md`](docs/superpowers/specs/2026-06-27-padel-reservas-design.md)
 - **izar4 API reference:** [`docs/API.md`](docs/API.md)
+- **Plans:** [`docs/superpowers/plans/`](docs/superpowers/plans/)
 
-Implementation (PWA in `src/`, Cloudflare Worker in `worker/`) follows the implementation plan.
+Deploy is wired in `wrangler.toml` (KV id + VAPID public committed); `VAPID_PRIVATE` + `DEVICE_SECRET`
+are Worker secrets. Rebuild+redeploy: `VITE_VAPID_PUBLIC=<pub> VITE_DEVICE_SECRET=<same as worker DEVICE_SECRET> npm run build && npm run worker:deploy`.
 
 ## Architecture (short)
 `PWA (React + service worker)` ⇄ `1 Cloudflare Worker (proxy + KV + cron poll/grab/push)` ⇄ `izar4 WP REST API`, plus **Web Push (VAPID)** to the device.
