@@ -1,0 +1,12 @@
+{
+  "app": { "title": "Pádel" },
+  "tabs": { "slots": "Slots", "watch": "Watch", "stats": "Stats", "settings": "Settings" },
+  "slots": {
+    "selectDate": "Select a date",
+    "loading": "Loading slots…",
+    "error": "Failed to load slots.",
+    "dayBlocked": "Day is blocked. Booking unavailable.",
+    "viewOnlyBeyondHorizon": "Beyond booking window — view only"
+  },
+  "status": { "libre": "Free", "ocupado": "Busy", "bloqueado": "Blocked", "pasado": "Past", "pronto": "Soon", "mine": "Mine" }
+}
