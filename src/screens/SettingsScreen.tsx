@@ -4,6 +4,10 @@ import { ProfileModal } from '../components/ProfileModal';
 import { setLanguage } from '../i18n';
 import { APP_VERSION } from '../config';
 import type { Profile } from '../lib/profile';
+import { loadPrefs, savePrefs, type NotifPrefs, type NotifType } from '../lib/notifPrefs';
+import { syncRegistration } from '../lib/pushClient';
+import { NotifGate } from '../components/NotifGate';
+import { currentPermState } from '../lib/push';
 
 const LANGS: { code: 'uk' | 'en' | 'ru' | 'es'; label: string }[] = [
   { code: 'uk', label: 'Українська' }, { code: 'en', label: 'English' },
@@ -13,6 +17,14 @@ const LANGS: { code: 'uk' | 'en' | 'ru' | 'es'; label: string }[] = [
 export function SettingsScreen({ profile, onProfileSaved }: { profile: Profile; onProfileSaved: (p: Profile) => void }) {
   const { t, i18n } = useTranslation();
   const [editing, setEditing] = useState(false);
+  const [prefs, setPrefs] = useState(loadPrefs());
+  const [gateOpen, setGateOpen] = useState(false);
+  function update(p: NotifPrefs) { setPrefs(p); savePrefs(p); void syncRegistration(); }
+  const toggle = (on: boolean) => (
+    <span style={{ width: 38, height: 22, borderRadius: 20, background: on ? '#1d4ed8' : '#33415a', position: 'relative', flex: '0 0 auto' }}>
+      <span style={{ position: 'absolute', top: 2, left: on ? 18 : 2, width: 18, height: 18, borderRadius: '50%', background: '#fff' }} />
+    </span>
+  );
 
   const group: React.CSSProperties = { background: '#101826', border: '1px solid #1f2b3c', borderRadius: 14, padding: '6px 12px', margin: '0 14px 10px' };
   const item: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #141d2a', fontSize: 13 };
@@ -42,6 +54,38 @@ export function SettingsScreen({ profile, onProfileSaved }: { profile: Profile; 
         ))}
       </div>
 
+      <div style={label}>{t('notif.section')}</div>
+      <div style={group}>
+        <div style={item} onClick={() => { if (currentPermState() !== 'granted') setGateOpen(true); else update({ ...prefs, master: !prefs.master }); }}>
+          <span>{t('notif.master')}</span>{toggle(prefs.master && currentPermState() === 'granted')}
+        </div>
+        {(['freed','grabbed','limitOff','watchExpired','myCancelled'] as NotifType[]).map((ty) => (
+          <div key={ty} style={item} onClick={() => update({ ...prefs, types: { ...prefs.types, [ty]: !prefs.types[ty] } })}>
+            <span>{t(`notif.${ty}`)}</span>{toggle(prefs.types[ty])}
+          </div>
+        ))}
+        <div style={{ ...item, borderBottom: 'none' }} onClick={() => update({ ...prefs, suppressSelf: !prefs.suppressSelf })}>
+          <span>{t('notif.suppressSelf')}</span>{toggle(prefs.suppressSelf)}
+        </div>
+      </div>
+
+      <div style={label}>{t('notif.quiet')}</div>
+      <div style={group}>
+        <div style={item} onClick={() => update({ ...prefs, quiet: { ...prefs.quiet, enabled: !prefs.quiet.enabled } })}>
+          <span>{t('notif.quiet')}</span>{toggle(prefs.quiet.enabled)}
+        </div>
+        {prefs.quiet.enabled && (
+          <div style={{ ...item, borderBottom: 'none', flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+            <div style={{ fontSize: 11, color: '#7e92ad' }}>{t('notif.nightAllowed')}</div>
+            {(['grabbed','freed','myCancelled'] as NotifType[]).map((ty) => (
+              <div key={ty} style={{ display: 'flex', justifyContent: 'space-between' }} onClick={() => update({ ...prefs, quiet: { ...prefs.quiet, nightAllowed: { ...prefs.quiet.nightAllowed, [ty]: !prefs.quiet.nightAllowed[ty] } } })}>
+                <span style={{ fontSize: 12.5, color: '#bcd3f3' }}>{t(`notif.${ty}`)}</span>{toggle(prefs.quiet.nightAllowed[ty])}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div style={label}>{t('settings.limits')}</div>
       <div style={group}>
         <div style={{ ...item, borderBottom: 'none' }}><span>{t('settings.limits')}</span><b>{t('settings.limitsValue')}</b></div>
@@ -61,6 +105,7 @@ export function SettingsScreen({ profile, onProfileSaved }: { profile: Profile; 
         <ProfileModal initial={profile} mode="edit"
           onSave={(p) => { onProfileSaved(p); setEditing(false); }} onClose={() => setEditing(false)} />
       )}
+      {gateOpen && <NotifGate onClose={() => { setGateOpen(false); setPrefs(loadPrefs()); }} />}
     </div>
   );
 }

@@ -43,5 +43,15 @@
     "favourite": "Favourite slot", "autoGrabbed": "Auto-grabbed", "hours": "Hours on court", "hUnit": "h", "history": "History", "none": "—" },
   "settings": { "title": "Settings", "profile": "Profile", "language": "Interface language",
     "limits": "Limits", "limitsValue": "3 per week · 1 per day", "version": "Version", "install": "Install app", "editProfile": "Edit profile" },
-  "install": { "banner": "Install the app for push and quick access", "ios": "Tap Share → Add to Home Screen", "cta": "Install", "later": "Later" }
+  "install": { "banner": "Install the app for push and quick access", "ios": "Tap Share → Add to Home Screen", "cta": "Install", "later": "Later" },
+  "notif": {
+    "section": "Notifications", "master": "All notifications", "freed": "🆓 Slot freed",
+    "grabbed": "🎯 Grabbed for you", "limitOff": "⛔ Auto-grab disabled",
+    "watchExpired": "⌛ Watch expired", "myCancelled": "❌ My booking cancelled",
+    "suppressSelf": "Don't notify my own actions", "quiet": "Quiet hours", "quietWindow": "Window",
+    "nightAllowed": "Allowed at night",
+    "installTitle": "Add to Home Screen", "installBody": "On iPhone, notifications only work in the installed app.",
+    "enableTitle": "Enable notifications", "enableBody": "To catch freed courts and auto-grab results.",
+    "enableCta": "Enable", "deniedTitle": "Notifications are off", "deniedBody": "Turn them on in phone Settings → app → Notifications.",
+    "recheck": "Check again", "onTitle": "Notifications on ✓", "unsupportedTitle": "This device doesn't support web push" }
 }

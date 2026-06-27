@@ -43,5 +43,15 @@
     "favourite": "Turno favorito", "autoGrabbed": "Capturadas auto", "hours": "Horas en pista", "hUnit": "h", "history": "Historial", "none": "—" },
   "settings": { "title": "Ajustes", "profile": "Perfil", "language": "Idioma de la interfaz",
     "limits": "Límites", "limitsValue": "3 por semana · 1 por día", "version": "Versión", "install": "Instalar app", "editProfile": "Editar perfil" },
-  "install": { "banner": "Instala la app para notificaciones y acceso rápido", "ios": "Pulsa Compartir → Añadir a pantalla de inicio", "cta": "Instalar", "later": "Más tarde" }
+  "install": { "banner": "Instala la app para notificaciones y acceso rápido", "ios": "Pulsa Compartir → Añadir a pantalla de inicio", "cta": "Instalar", "later": "Más tarde" },
+  "notif": {
+    "section": "Notificaciones", "master": "Todas las notificaciones", "freed": "🆓 Turno libre",
+    "grabbed": "🎯 Capturado para ti", "limitOff": "⛔ Captura automática desactivada",
+    "watchExpired": "⌛ Captura expirada", "myCancelled": "❌ Cancelaron mi reserva",
+    "suppressSelf": "No avisar de mis acciones", "quiet": "Horas de silencio", "quietWindow": "Ventana",
+    "nightAllowed": "Permitido de noche",
+    "installTitle": "Añade a pantalla de inicio", "installBody": "En iPhone las notificaciones solo funcionan en la app instalada.",
+    "enableTitle": "Activar notificaciones", "enableBody": "Para capturar pistas libres y ver capturas automáticas.",
+    "enableCta": "Activar", "deniedTitle": "Notificaciones desactivadas", "deniedBody": "Actívalas en Ajustes del teléfono → app → Notificaciones.",
+    "recheck": "Comprobar de nuevo", "onTitle": "Notificaciones activas ✓", "unsupportedTitle": "Este dispositivo no admite web push" }
 }
