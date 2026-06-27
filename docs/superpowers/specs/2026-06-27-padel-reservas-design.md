@@ -161,6 +161,9 @@ Bottom tab bar (4): **Slots · Watch · Stats · Settings**. "My bookings" is re
 10. **My-bookings entry + origin badges.** Blue "🗂 My bookings · N" chip on Slots; badges 📱 app
     / 🎯 auto / 🌐 izar4 (code matched → 1 tap / code differs → ask).
 11. **Notification-permission flow.** States A (not installed), B (priming), C (denied) — see §10.
+12. **Install prompt.** Dismissible banner: Android/desktop one-tap install (`beforeinstallprompt`);
+    iOS shows Share → "Add to Home Screen" instructions; hidden when already running standalone.
+    Re-offerable from Settings. (Added in Phase 2; reused by the notification flow's state A.)
 
 Mockups are saved under `.superpowers/brainstorm/` (gitignored).
 
@@ -209,6 +212,15 @@ Mockups are saved under `.superpowers/brainstorm/` (gitignored).
      grabbed booking (id + code) for device sync, mark watch **Grabbed**, send the **important**
      "🎯 grabbed for you" push.
   3. On race (someone booked first) → keep watching the remaining franjas.
+- **Past-slot rule (cutoff = slot START time):** a freed slot whose start time has already passed is
+  treated as past/unbookable (mirrors izar4; `minutos_antelacion_min` = 0 for padel). The Worker
+  **never grabs** such a slot and **does not** send a "slot freed" push for it. The start-vs-now
+  check happens at grab time, so the 2-min poll lag can never cause an already-started slot to be
+  grabbed. (Example: watch on 10:00–11:30, a cancellation frees it at 10:01 → skipped, no push.)
+- **Watch expiry:** a watch stays active for its still-future slots. When **all** of a watch's slots
+  have passed their start time (or the date itself is past) with no catch, the Worker
+  **auto-deactivates** it (status "⌛ Expired") and sends one informational "watch expired" push
+  (its own toggle, default on). A watch where only *some* slots have passed stays active for the rest.
 - Limit exhaustion can be triggered by **manual bookings or grabs** alike; the Worker re-evaluates
   every poll and disables affected watches with a notification.
 
@@ -218,9 +230,11 @@ Mockups are saved under `.superpowers/brainstorm/` (gitignored).
 
 ### 9.1 Types (each a toggle in Settings; Worker sends only enabled ones)
 - Master on/off.
-- 🆓 Slot freed (any cancellation, padel, **next 7 days** = notification window).
+- 🆓 Slot freed (any cancellation, padel, **next 7 days** = notification window); only slots whose
+  start time hasn't passed (past slots are not actionable, so no push).
 - 🎯 Grabbed for you (auto-grab succeeded) — **important**; default on.
 - ⛔ Auto-grab disabled (weekly limit reached).
+- ⌛ Watch expired (a watch's slots all passed without a catch); default on.
 - ❌ My booking cancelled (detected by vivienda + name).
 - **Suppress my own actions:** don't notify about slots the user themselves just booked/cancelled
   (default on). Implemented by the device telling the Worker its recent self-actions (or the Worker
@@ -245,9 +259,13 @@ version capability (`'PushManager' in window` inside standalone); `Notification.
 subscription presence.
 
 - **Not installed:**
-  - **iOS** → instructions: Share → "Add to Home Screen" (iOS gives no install API).
-  - **Android** → capture `beforeinstallprompt` and offer **one-tap Install**.
-  Push requires install on iOS; strongly recommended on Android.
+  - **iOS** → instructions: Share → "Add to Home Screen" (iOS gives no install API, no
+    `beforeinstallprompt`).
+  - **Android / desktop** → capture `beforeinstallprompt`, suppress the default mini-infobar, and
+    offer **one-tap Install** via the saved event's `.prompt()`.
+  Push requires install on iOS; strongly recommended on Android. The same logic powers a standalone,
+  dismissible **install banner** (screen 12) shown outside the notification flow; detect
+  already-installed via `display-mode: standalone` / iOS `navigator.standalone` and hide it then.
 - **Permission `default` (installed):** show **priming** screen first, then call
   `Notification.requestPermission()` from the tap (a denied state is permanent for the web API, so
   never prompt cold).
