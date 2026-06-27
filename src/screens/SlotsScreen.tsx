@@ -23,7 +23,12 @@ import { syncRegistration } from '../lib/pushClient';
 import { WEEKLY_LIMIT, DAILY_LIMIT, BOOKING_HORIZON_DAYS } from '../config';
 import type { Franja, Reservation, SlotView } from '../lib/types';
 
-export function SlotsScreen() {
+interface SlotsScreenProps {
+  focus?: { fecha: string; slot: string } | null;   // jump to + blink a slot (from My bookings)
+  onFocusConsumed?: () => void;
+}
+
+export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps = {}) {
   const { t } = useTranslation();
   const today = dateToYmd(new Date());
   const [selected, setSelected] = useState(today);
@@ -37,6 +42,7 @@ export function SlotsScreen() {
   const [cancelSlot, setCancelSlot] = useState<SlotView | null>(null);
   const [franjas, setFranjas] = useState<Franja[]>([]);
   const [watchOpen, setWatchOpen] = useState(false);
+  const [highlightSlot, setHighlightSlot] = useState<string | null>(null);
 
   const secret = getDeviceSecret();
   const needProfile = !isProfileComplete(profile);
@@ -60,6 +66,16 @@ export function SlotsScreen() {
   }, [secret, selected, t]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Jump to a slot (from My bookings): switch date, then blink it for 3s.
+  useEffect(() => {
+    if (focus) { setSelected(focus.fecha); setHighlightSlot(focus.slot); onFocusConsumed?.(); }
+  }, [focus, onFocusConsumed]);
+  useEffect(() => {
+    if (!highlightSlot) return;
+    const id = window.setTimeout(() => setHighlightSlot(null), 3000);
+    return () => window.clearTimeout(id);
+  }, [highlightSlot]);
 
   const remaining = profile ? weeklyRemaining(allRes, profile.vivienda, selected, WEEKLY_LIMIT) : WEEKLY_LIMIT;
   const beyondHorizon = selected > addDays(today, BOOKING_HORIZON_DAYS);
@@ -134,6 +150,7 @@ export function SlotsScreen() {
           <SlotRow key={s.franja.slot} slot={s}
             mine={!!(s.reservation && profile && isMine(s.reservation, profile))}
             canBook={!beyondHorizon}
+            highlight={highlightSlot === s.franja.slot}
             onBook={() => tryBook(s)} onCancel={() => setCancelSlot(s)} onWatch={() => setWatchOpen(true)} />
         ))}
       </div>

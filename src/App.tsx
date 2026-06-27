@@ -10,6 +10,7 @@ import { loadProfile, type Profile } from './lib/profile';
 export default function App() {
   const [tab, setTab] = useState<Tab>('slots');
   const [profile, setProfile] = useState<Profile | null>(loadProfile());
+  const [slotFocus, setSlotFocus] = useState<{ fecha: string; slot: string } | null>(null);
 
   useEffect(() => {
     const sync = () => { void import('./lib/syncGrabbed').then((m) => m.pullGrabbed()).catch(() => {}); };
@@ -25,8 +26,11 @@ export default function App() {
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', paddingTop: 'env(safe-area-inset-top)' }}>
       <InstallBanner />
       <div style={{ flex: 1 }}>
-        {tab === 'slots' && <SlotsScreen />}
-        {tab === 'mybookings' && (profile ? <MyBookingsScreen profile={profile} /> : null)}
+        {tab === 'slots' && <SlotsScreen focus={slotFocus} onFocusConsumed={() => setSlotFocus(null)} />}
+        {tab === 'mybookings' && (profile ? (
+          <MyBookingsScreen profile={profile}
+            onOpenSlot={(fecha, slot) => { setSlotFocus({ fecha, slot }); setTab('slots'); }} />
+        ) : null)}
         {tab === 'stats' && <StatsScreen />}
         {tab === 'settings' && profile && <SettingsScreen profile={profile} onProfileSaved={(p) => setProfile(p)} />}
       </div>

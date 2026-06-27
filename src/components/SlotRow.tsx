@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SlotView } from '../lib/types';
 
@@ -17,14 +18,19 @@ interface Props {
   onBook: () => void;     // for free slots
   onCancel: () => void;   // for own slots
   onWatch: () => void;    // for busy slots that aren't mine
+  highlight?: boolean;    // briefly blink + scroll into view (when jumped to from My bookings)
 }
 
-export function SlotRow({ slot, mine, canBook, onBook, onCancel, onWatch }: Props) {
+export function SlotRow({ slot, mine, canBook, highlight, onBook, onCancel, onWatch }: Props) {
   const { t } = useTranslation();
   const badgeKey = mine && slot.status === 'ocupado' ? 'mine' : slot.status;
   const c = BADGE[badgeKey];
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (highlight) ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [highlight]);
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 8px', borderBottom: '1px solid #141d2a' }}>
+    <div ref={ref} className={highlight ? 'blink' : undefined} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 8px', borderBottom: '1px solid #141d2a' }}>
       <div style={{ width: 96, fontSize: 12.5, fontWeight: 600 }}>{slot.franja.start}–{slot.franja.end}</div>
       <div style={{ width: 78 }}>
         <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 20, background: c.bg, color: c.fg }}>
