@@ -134,7 +134,14 @@ code/Код отмены"**. izar4 API field names are unchanged.
 
 ## 6. Screens (11 mockups approved)
 
-Bottom tab bar (4): **Slots · Watch · Stats · Settings**. "My bookings" is reached via a chip on Slots.
+Bottom tab bar (4): **Slots · My bookings · Stats · Settings** (revised during Phase 2b — see note).
+A **"My bookings · N"** chip on Slots also jumps to that tab.
+
+> **Nav decision (revised 2026-06-27, Phase 2b):** The original sketch had a *Watch* tab + a
+> *My bookings* chip. Since auto-grab/Watch lands in Phase 3, My bookings was promoted to a tab now,
+> and **Watch (auto-grab) management will hang off the Slots screen** (you create watches there via
+> 🎯, and an "active watches" section/sheet is reachable from Slots) rather than a 5th tab — keeping
+> the bar at 4 tabs. So final tabs = Slots · My bookings · Stats · Settings.
 
 1. **Slots (home).** Header: language, title, settings. Sub-bar chips: weekly remaining
    (`1/3`), profile (`P3-7 · Dmytro`), **"My bookings · N"** entry. Month date strip (min =
