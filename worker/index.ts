@@ -1,5 +1,6 @@
-import { diffSnapshots, chooseGrab, isWatchExpired, countWeekKeys, type Watch, type FranjaMap } from './logic';
+import { diffSnapshots, chooseGrab, isWatchExpired, countWeekKeys, slotStartPassed, type Watch, type FranjaMap } from './logic';
 import { sendPush, type PushSub, type Vapid } from './push';
+import { buildPushText, type PushParams } from './pushText';
 
 export interface Env {
   DEVICE_SECRET: string;
@@ -22,6 +23,8 @@ interface DeviceRecord {
   subscription: PushSub;
   profile: { nombre: string; vivienda: string; codigo: string };
   watches: Watch[];
+  locale?: string;
+  recentActions?: string[];
   prefs: { master: boolean; types: Record<string, boolean>; suppressSelf: boolean;
            quiet: { enabled: boolean; from: string; to: string; nightAllowed: Record<string, boolean> } };
 }
@@ -90,18 +93,27 @@ async function runPoll(env: Env, now: Date): Promise<void> {
   const franjas: FranjaMap = {};
   for (const f of franjasRaw) franjas[f.title?.rendered ?? ''] = { start: (f.acf?.hora_inicio_franjas ?? '00:00').slice(0, 5) };
 
-  const reservasRaw = await (await fetch(`${IZAR4}/wp-json/wp/v2/reservas?per_page=100&recurso=${TERM}&_fields=id,acf`, { cache: 'no-store' })).json() as any[];
+  const reservasRaw: any[] = [];
+  for (let page = 1; page <= 5; page++) {
+    const pageRes = await fetch(`${IZAR4}/wp-json/wp/v2/reservas?per_page=100&page=${page}&recurso=${TERM}&_fields=id,acf`, { cache: 'no-store' });
+    if (!pageRes.ok) break;
+    const arr = await pageRes.json() as any[];
+    reservasRaw.push(...arr);
+    if (arr.length < 100) break;
+  }
   const reservas = reservasRaw.filter((r) => r.acf).map((r) => ({
     fecha: String(r.acf.fecha_reservas).replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3$2$1'),
-    slot: r.acf.id_franja_reservas, vivienda: r.acf.vivienda_reservas ?? '',
+    slot: r.acf.id_franja_reservas, vivienda: r.acf.vivienda_reservas ?? '', nombre: r.acf.nombre_reservas ?? '',
   }));
   const occupied = reservas.map((r) => `${r.fecha}|${r.slot}`);
 
-  // 2. diff vs snapshot
+  // 2. diff vs snapshot (snapshot stores full reservas with owners)
   const prevRaw = await env.KV.get('snapshot');
-  const prev: string[] = prevRaw ? JSON.parse(prevRaw) : [];
-  const { freed } = diffSnapshots(prev, occupied);
-  await env.KV.put('snapshot', JSON.stringify(occupied));
+  const prev: { fecha: string; slot: string; vivienda: string; nombre: string }[] = prevRaw ? JSON.parse(prevRaw) : [];
+  const prevKeys = prev.map((r) => `${r.fecha}|${r.slot}`);
+  const prevByKey = new Map(prev.map((r) => [`${r.fecha}|${r.slot}`, r]));
+  const { freed } = diffSnapshots(prevKeys, occupied);
+  await env.KV.put('snapshot', JSON.stringify(reservas));
   if (prev.length === 0) return; // first run: just seed the snapshot, no notifications
 
   const todayYmd = dateToYmd(now);
@@ -121,29 +133,46 @@ async function runPoll(env: Env, now: Date): Promise<void> {
     // 3a. auto-grab on active watches
     for (const watch of rec.watches.filter((w) => w.active)) {
       if (isWatchExpired(watch, franjas, now)) { watch.active = false; changed = true;
-        await maybePush(rec, 'watchExpired', { title: 'Pádel', body: `Ловля ${watch.fecha} истекла`, url: '/' }, env, vapid, now); continue; }
+        await maybePush(rec, 'watchExpired', { fecha: watch.fecha }, vapid, now); continue; }
       const weekCount = countWeekKeys(reservas, rec.profile.vivienda, watch.fecha);
       const dayCount = reservas.filter((r) => r.vivienda.trim().toUpperCase() === rec.profile.vivienda.trim().toUpperCase() && r.fecha === watch.fecha).length;
       const slot = chooseGrab(watch, freed, { franjas, now, weekCount, dayCount, weeklyLimit: 3, dailyLimit: 1 });
       if (!slot) {
         if (weekCount >= 3) { watch.active = false; changed = true;
-          await maybePush(rec, 'limitOff', { title: 'Pádel', body: 'Авто-перехват выключен: лимит 3/нед', url: '/' }, env, vapid, now); }
+          await maybePush(rec, 'limitOff', {}, vapid, now); }
         continue;
       }
       const ok = await createReservation(rec.profile, watch.fecha, slot);
       if (ok.ok) {
         watch.active = false; changed = true;
         grabbedOut.push({ fecha: watch.fecha, slot, id: ok.id, codigo: rec.profile.codigo, start: franjas[slot]?.start ?? '' });
-        await maybePush(rec, 'grabbed', { title: '🎯 Pádel', body: `Перехватил слот ${franjas[slot]?.start ?? ''} ${watch.fecha}`, url: '/' }, env, vapid, now);
+        await maybePush(rec, 'grabbed', { time: franjas[slot]?.start ?? '', fecha: watch.fecha }, vapid, now);
       }
     }
 
     // 3b. generic freed-slot notifications (next 7 days), excluding auto-grabbed-by-this-device
     if (rec.prefs.types.freed) {
       for (const key of weekFreed) {
+        if (rec.prefs.suppressSelf && (rec.recentActions ?? []).includes(key)) continue;
         const [fecha, slot] = key.split('|');
         if (grabbedOut.some((g) => g.fecha === fecha && g.slot === slot)) continue;
-        await maybePush(rec, 'freed', { title: '🆓 Pádel', body: `Освободился слот ${franjas[slot]?.start ?? ''} ${fecha}`, url: '/' }, env, vapid, now);
+        await maybePush(rec, 'freed', { time: franjas[slot]?.start ?? '', fecha }, vapid, now);
+      }
+    }
+
+    // 3c. "my booking cancelled" — owner matched by vivienda + name, future only
+    if (rec.prefs.types.myCancelled) {
+      const v = rec.profile.vivienda.trim().toUpperCase();
+      const n = rec.profile.nombre.trim().toLowerCase();
+      for (const key of freed) {
+        const owner = prevByKey.get(key);
+        if (!owner) continue;
+        if (owner.vivienda.trim().toUpperCase() !== v || owner.nombre.trim().toLowerCase() !== n) continue;
+        const [fecha, slot] = key.split('|');
+        if (slotStartPassed(fecha, slot, franjas, now)) continue;            // only future
+        if (rec.prefs.suppressSelf && (rec.recentActions ?? []).includes(key)) continue;
+        if (grabbedOut.some((g) => g.fecha === fecha && g.slot === slot)) continue;
+        await maybePush(rec, 'myCancelled', { time: franjas[slot]?.start ?? '', fecha }, vapid, now);
       }
     }
 
@@ -156,7 +185,7 @@ async function runPoll(env: Env, now: Date): Promise<void> {
   }
 }
 
-async function maybePush(rec: DeviceRecord, type: string, payload: object, _env: Env, vapid: Vapid, now: Date): Promise<void> {
+async function maybePush(rec: DeviceRecord, type: string, params: PushParams, vapid: Vapid, now: Date): Promise<void> {
   if (!rec.prefs.types[type]) return;
   if (rec.prefs.quiet?.enabled) {
     const cur = now.getHours() * 60 + now.getMinutes();
@@ -165,7 +194,8 @@ async function maybePush(rec: DeviceRecord, type: string, payload: object, _env:
     const inQuiet = from <= to ? cur >= from && cur < to : cur >= from || cur < to;
     if (inQuiet && !rec.prefs.quiet.nightAllowed?.[type]) return;
   }
-  await sendPush(rec.subscription, payload, vapid);
+  const text = buildPushText(rec.locale ?? 'uk', type, params);
+  await sendPush(rec.subscription, { title: text.title, body: text.body, url: '/' }, vapid);
 }
 
 async function createReservation(profile: { nombre: string; vivienda: string; codigo: string }, fecha: string, slot: string): Promise<{ ok: boolean; id?: number }> {

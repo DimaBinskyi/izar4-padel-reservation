@@ -4,6 +4,8 @@ import { WORKER_BASE } from '../config';
 import { loadProfile } from './profile';
 import { loadWatches } from './watchlist';
 import { loadPrefs } from './notifPrefs';
+import { recentActionKeys } from './recentActions';
+import i18n from '../i18n';
 
 function deviceId(): string { return getDeviceSecret(); }
 
@@ -31,6 +33,6 @@ export async function syncRegistration(sub?: PushSubscription): Promise<void> {
   await fetch(`${WORKER_BASE}/api/subscribe?device=${encodeURIComponent(deviceId())}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-device-secret': getDeviceSecret() },
-    body: JSON.stringify({ subscription: subscription.toJSON(), profile, watches: loadWatches(), prefs: loadPrefs() }),
+    body: JSON.stringify({ subscription: subscription.toJSON(), profile, watches: loadWatches(), prefs: loadPrefs(), locale: i18n.language, recentActions: recentActionKeys() }),
   });
 }
