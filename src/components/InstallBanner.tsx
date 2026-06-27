@@ -19,7 +19,9 @@ export function InstallBanner() {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    if (isStandalone() || localStorage.getItem(DISMISS_KEY)) return;
+    const visits = parseInt(localStorage.getItem('padel_visits') ?? '0', 10) + 1;
+    localStorage.setItem('padel_visits', String(visits));
+    if (isStandalone() || localStorage.getItem(DISMISS_KEY) || visits < 2) return;
     const onBIP = (e: Event) => { e.preventDefault(); setDeferred(e as BIPEvent); setShow(true); };
     window.addEventListener('beforeinstallprompt', onBIP);
     if (isIOS()) setShow(true); // iOS: no event, show instructions

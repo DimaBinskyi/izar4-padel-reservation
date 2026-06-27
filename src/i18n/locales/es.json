@@ -40,7 +40,7 @@
     "originApp": "📱 en la app", "originAuto": "🎯 captura automática", "originIzar4": "🌐 en la web izar4", "cancel": "Cancelar" },
   "stats": { "title": "Estadísticas", "week": "Semana", "month": "Mes", "all": "Todo", "custom": "Periodo",
     "bookings": "reservas", "played": "jugadas", "cancelled": "canceladas", "upcoming": "próximas",
-    "favourite": "Turno favorito", "autoGrabbed": "Capturadas auto", "hours": "Horas en pista", "history": "Historial", "none": "—" },
+    "favourite": "Turno favorito", "autoGrabbed": "Capturadas auto", "hours": "Horas en pista", "hUnit": "h", "history": "Historial", "none": "—" },
   "settings": { "title": "Ajustes", "profile": "Perfil", "language": "Idioma de la interfaz",
     "limits": "Límites", "limitsValue": "3 por semana · 1 por día", "version": "Versión", "install": "Instalar app", "editProfile": "Editar perfil" },
   "install": { "banner": "Instala la app para notificaciones y acceso rápido", "ios": "Pulsa Compartir → Añadir a pantalla de inicio", "cta": "Instalar", "later": "Más tarde" }

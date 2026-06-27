@@ -40,7 +40,7 @@
     "originApp": "📱 в приложении", "originAuto": "🎯 авто-перехват", "originIzar4": "🌐 на сайте izar4", "cancel": "Отменить" },
   "stats": { "title": "Статистика", "week": "Неделя", "month": "Месяц", "all": "Всё", "custom": "Период",
     "bookings": "броней", "played": "сыграно", "cancelled": "отмен", "upcoming": "предстоящие",
-    "favourite": "Любимый слот", "autoGrabbed": "Поймано авто", "hours": "Часов на корте", "history": "История", "none": "—" },
+    "favourite": "Любимый слот", "autoGrabbed": "Поймано авто", "hours": "Часов на корте", "hUnit": "ч", "history": "История", "none": "—" },
   "settings": { "title": "Настройки", "profile": "Профиль", "language": "Язык интерфейса",
     "limits": "Лимиты", "limitsValue": "3 в неделю · 1 в день", "version": "Версия", "install": "Установить приложение", "editProfile": "Редактировать профиль" },
   "install": { "banner": "Установи приложение для пушей и быстрого доступа", "ios": "Нажми «Поделиться» → «На экран Домой»", "cta": "Установить", "later": "Позже" }

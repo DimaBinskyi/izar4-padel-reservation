@@ -55,7 +55,7 @@ export function StatsScreen() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {mini(t('stats.upcoming'), String(r.upcoming))}
-          {mini(t('stats.hours'), `${r.hours.toFixed(1)} h`)}
+          {mini(t('stats.hours'), `${r.hours.toFixed(1)} ${t('stats.hUnit')}`)}
         </div>
         <div style={{ fontSize: 10.5, textTransform: 'uppercase', color: '#7e92ad', margin: '12px 0 7px' }}>{t('stats.history')}</div>
         {history.map((x) => {

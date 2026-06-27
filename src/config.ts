@@ -8,3 +8,4 @@ export const CALENDAR_DAYS = 31;               // how many days the strip shows 
 export const NOTIFY_WINDOW_DAYS = 7;           // generic "slot freed" window (used in Phase 3)
 export const WEEKLY_LIMIT = 3;                 // per vivienda (enforced by us)
 export const DAILY_LIMIT = 1;                  // per vivienda
+export const APP_VERSION = '1.0.0';

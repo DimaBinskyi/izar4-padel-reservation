@@ -14,24 +14,30 @@ export function MyBookingsScreen({ profile }: { profile: Profile }) {
   const today = dateToYmd(new Date());
   const secret = getDeviceSecret();
   const [rows, setRows] = useState<{ res: Reservation; franja: Franja; origin: string }[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [cancelRow, setCancelRow] = useState<{ res: Reservation; franja: Franja } | null>(null);
 
   const load = useCallback(async () => {
     setRows(null);
-    const [all, franjas, log] = await Promise.all([fetchAllReservations(secret), fetchFranjas(secret), listBookings()]);
-    const fmap = new Map(franjas.map((f) => [f.slot, f]));
-    const lmap = new Map<string, BookingRecord>(log.map((r) => [`${r.fecha}|${r.slot}`, r]));
-    const mine = all
-      .filter((r) => r.fecha >= today && isMine(r, profile))
-      .sort((a, b) => (a.fecha === b.fecha ? a.slot.localeCompare(b.slot) : a.fecha.localeCompare(b.fecha)))
-      .map((res) => {
-        const rec = lmap.get(`${res.fecha}|${res.slot}`);
-        const origin = rec ? rec.origin : 'izar4';
-        const franja = fmap.get(res.slot) ?? { id: 0, slot: res.slot, start: '--:--', end: '--:--', order: 0 };
-        return { res, franja, origin };
-      });
-    setRows(mine);
-  }, [secret, today, profile]);
+    setError(null);
+    try {
+      const [all, franjas, log] = await Promise.all([fetchAllReservations(secret), fetchFranjas(secret), listBookings()]);
+      const fmap = new Map(franjas.map((f) => [f.slot, f]));
+      const lmap = new Map<string, BookingRecord>(log.map((r) => [`${r.fecha}|${r.slot}`, r]));
+      const mine = all
+        .filter((r) => r.fecha >= today && isMine(r, profile))
+        .sort((a, b) => (a.fecha === b.fecha ? a.slot.localeCompare(b.slot) : a.fecha.localeCompare(b.fecha)))
+        .map((res) => {
+          const rec = lmap.get(`${res.fecha}|${res.slot}`);
+          const origin = rec ? rec.origin : 'izar4';
+          const franja = fmap.get(res.slot) ?? { id: 0, slot: res.slot, start: '--:--', end: '--:--', order: 0 };
+          return { res, franja, origin };
+        });
+      setRows(mine);
+    } catch {
+      setError(t('slots.error'));
+    }
+  }, [secret, today, profile, t]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -52,7 +58,8 @@ export function MyBookingsScreen({ profile }: { profile: Profile }) {
     <div style={{ maxWidth: 420, margin: '0 auto' }}>
       <header style={{ textAlign: 'center', padding: '12px 0', fontSize: 17, fontWeight: 700 }}>{t('mybookings.title')}</header>
       <div style={{ padding: '0 14px 8px', fontSize: 11.5, color: '#8aa0bd' }}>{t('mybookings.subtitle')}</div>
-      {rows === null && <div style={{ padding: 16, color: '#8aa0bd' }}>…</div>}
+      {error && <div style={{ padding: 16, color: '#ff9b9b' }}>{error}</div>}
+      {!error && rows === null && <div style={{ padding: 16, color: '#8aa0bd' }}>…</div>}
       {rows && rows.length === 0 && <div style={{ padding: 16, color: '#8aa0bd' }}>{t('mybookings.empty')}</div>}
       <div style={{ padding: '0 12px' }}>
         {rows?.map(({ res, franja, origin }) => {

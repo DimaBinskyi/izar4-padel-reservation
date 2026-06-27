@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProfileModal } from '../components/ProfileModal';
 import { setLanguage } from '../i18n';
+import { APP_VERSION } from '../config';
 import type { Profile } from '../lib/profile';
 
 const LANGS: { code: 'uk' | 'en' | 'ru' | 'es'; label: string }[] = [
@@ -44,6 +45,16 @@ export function SettingsScreen({ profile, onProfileSaved }: { profile: Profile; 
       <div style={label}>{t('settings.limits')}</div>
       <div style={group}>
         <div style={{ ...item, borderBottom: 'none' }}><span>{t('settings.limits')}</span><b>{t('settings.limitsValue')}</b></div>
+      </div>
+
+      <div style={label}>{t('settings.version')}</div>
+      <div style={group}>
+        <div style={item}>
+          <span>{t('settings.install')}</span>
+          <button onClick={() => { localStorage.removeItem('padel_install_dismissed'); localStorage.removeItem('padel_visits'); alert(t('install.banner')); }}
+            style={{ border: 'none', background: 'transparent', color: '#86b7ff', fontSize: 12.5 }}>{t('settings.install')} ›</button>
+        </div>
+        <div style={{ ...item, borderBottom: 'none' }}><span>{t('settings.version')}</span><b>{APP_VERSION}</b></div>
       </div>
 
       {editing && (
