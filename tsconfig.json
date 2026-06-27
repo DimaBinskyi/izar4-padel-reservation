@@ -16,6 +16,5 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["vitest/globals"]
   },
-  "include": ["src", "worker"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": ["src", "worker"]
 }
