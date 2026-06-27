@@ -9,3 +9,8 @@ export const NOTIFY_WINDOW_DAYS = 7;           // generic "slot freed" window (u
 export const WEEKLY_LIMIT = 3;                 // per vivienda (enforced by us)
 export const DAILY_LIMIT = 1;                  // per vivienda
 export const APP_VERSION = '1.0.0';
+
+// Web Push: the VAPID public key is injected at build time (VITE_VAPID_PUBLIC).
+export const VAPID_PUBLIC = import.meta.env.VITE_VAPID_PUBLIC ?? '';
+// Base for Worker endpoints. Same-origin in production (Worker serves the PWA); empty = relative.
+export const WORKER_BASE = import.meta.env.VITE_WORKER_BASE ?? '';
