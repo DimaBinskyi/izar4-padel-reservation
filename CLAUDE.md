@@ -42,8 +42,7 @@ worker/      Cloudflare Worker — KV + Cron + Web Push (VAPID)      (added duri
 - **Cancellation:** own bookings only. Keep a **per-booking code memory** (the code used at
   creation) so cancel works after the profile code changes. **Never display or harvest other
   users' codes**; for unknown bookings, require the correct code (proof of ownership).
-- **Calendar:** month view, min day = today; days beyond the 21-day horizon are view-only.
-- **Touch/drag handlers** read the offset from a `useRef` (React state is stale within one synchronous gesture); the carousel drives the track `transform` imperatively (no setState per `touchmove`).
+- **Calendar:** month view, min day = today; days beyond the 21-day horizon are view-only. Day changes via tapping the date strip (no swipe/carousel — that was tried and removed).
 
 ## izar4 gotchas (see docs/API.md §4)
 - Call izar4 **only through the Worker proxy** — direct browser calls fail CORS.
