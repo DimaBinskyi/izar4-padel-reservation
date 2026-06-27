@@ -41,7 +41,7 @@ A single free **Cloudflare Worker** supplies the only thing a phone cannot do it
 | 7 | Booking horizon | **21 days** (server allows it — verified). Calendar shows ~1 month; days beyond horizon are view-only. Min day = today. |
 | 8 | Limits | Respect **3/week + 1/day** (per vivienda). Fixed, **not user-editable**. Enforced by us (server doesn't). |
 | 9 | Poll cadence | Every **2 min** active hours; every **10 min** during quiet hours **00:00–07:00**. |
-| 10 | Notifications target | **Any cancellation** (slot freed) — global, padel, within the week horizon. |
+| 10 | Notifications target | **Any cancellation** (slot freed) — global, padel, within the **7-day notification window**. (Distinct from the 21-day booking horizon — see note below.) |
 | 11 | Auto-grab | **Yes** — per a date+slot-range watchlist; grabs first freed slot, ≤1/day, ≤3/week; sends an **important** "grabbed for you" push. |
 | 12 | Identity of "mine" | **Limit count: strictly by vivienda.** Personal list / "my booking cancelled": **vivienda + name** (soft). |
 | 13 | Profile in cloud | Stored in Worker KV (name, vivienda, **cancel code**) so the Worker can book on the user's behalf. Code is not secret on izar4 anyway. |
@@ -51,6 +51,14 @@ A single free **Cloudflare Worker** supplies the only thing a phone cannot do it
 
 UI label renames (all locales): **Vivienda → "Apartment/Квартира"**, **Código → "Cancel
 code/Код отмены"**. izar4 API field names are unchanged.
+
+> **Two distinct time windows** (do not conflate):
+> - **Booking horizon = 21 days** — how far ahead a slot can be booked / watched / grabbed.
+> - **Notification window = 7 days** — how far ahead the generic "🆓 slot freed" push fires.
+>
+> The Worker diffs reservations over the full **21-day** horizon (so auto-grab works on any
+> watched date), but only emits generic freed-slot notifications for the next **7 days**.
+> Auto-grab "grabbed for you" notifications fire for any watched date regardless of the 7-day window.
 
 ---
 
@@ -210,7 +218,7 @@ Mockups are saved under `.superpowers/brainstorm/` (gitignored).
 
 ### 9.1 Types (each a toggle in Settings; Worker sends only enabled ones)
 - Master on/off.
-- 🆓 Slot freed (any cancellation, padel, within horizon).
+- 🆓 Slot freed (any cancellation, padel, **next 7 days** = notification window).
 - 🎯 Grabbed for you (auto-grab succeeded) — **important**; default on.
 - ⛔ Auto-grab disabled (weekly limit reached).
 - ❌ My booking cancelled (detected by vivienda + name).
@@ -259,11 +267,12 @@ subscription presence.
 - **`/subscribe`** — upsert `{subscription, profile, watchlist, prefs}` in KV under the device secret.
 - **Cron** (every minute; the handler decides whether to act based on time → 2-min cadence by day,
   10-min by night):
-  1. Fetch padel `reservas` for the horizon (cache-busted).
+  1. Fetch padel `reservas` over the full **21-day** booking horizon (cache-busted).
   2. Build occupied-key set; **diff** vs the stored snapshot → `freed` and `added`.
-  3. For each device: run **auto-grab** for matching watches (respecting limits, disabling as
-     needed); compute which notifications to send (freed / my-cancelled), honoring prefs +
-     quiet-hours + self-action suppression; **send Web Push**.
+  3. For each device: run **auto-grab** for matching watches on **any** watched date (respecting
+     limits, disabling as needed); compute which notifications to send — generic "freed" only for
+     the **next 7 days**, "grabbed"/"my-cancelled"/"limit-off" for any relevant date — honoring
+     prefs + quiet-hours + self-action suppression; **send Web Push**.
   4. Save the new snapshot.
 - **Backward-compatible API**: Worker can be redeployed anytime without breaking older PWA clients.
 
