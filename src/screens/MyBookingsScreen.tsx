@@ -5,6 +5,7 @@ import { fetchAllReservations, fetchFranjas, cancelReservation } from '../lib/iz
 import { getDeviceSecret } from '../lib/deviceSecret';
 import { listBookings, markCancelled, type BookingRecord } from '../lib/bookingsDb';
 import { addRecentAction } from '../lib/recentActions';
+import { applyOverrides, addOverride } from '../lib/overrides';
 import { syncRegistration } from '../lib/pushClient';
 import { isMine } from '../lib/mine';
 import { dateToYmd, ymdToDate } from '../lib/dates';
@@ -23,7 +24,8 @@ export function MyBookingsScreen({ profile }: { profile: Profile }) {
     setRows(null);
     setError(null);
     try {
-      const [all, franjas, log] = await Promise.all([fetchAllReservations(secret), fetchFranjas(secret), listBookings()]);
+      const [allRaw, franjas, log] = await Promise.all([fetchAllReservations(secret), fetchFranjas(secret), listBookings()]);
+      const all = applyOverrides(allRaw);
       const fmap = new Map(franjas.map((f) => [f.slot, f]));
       const lmap = new Map<string, BookingRecord>(log.map((r) => [`${r.fecha}|${r.slot}`, r]));
       const mine = all
@@ -47,9 +49,11 @@ export function MyBookingsScreen({ profile }: { profile: Profile }) {
     const r = await cancelReservation(secret, res.id, codigo);
     if (!r.ok) return false;
     await markCancelled(res.fecha, res.slot, Date.now());
-    addRecentAction(res.fecha, res.slot); void syncRegistration();
-    setCancelRow(null);
+    addRecentAction(res.fecha, res.slot);
+    addOverride({ key: `${res.fecha}|${res.slot}`, type: 'remove' });
+    void syncRegistration();
     await load();
+    setCancelRow(null);
     return true;
   }
 

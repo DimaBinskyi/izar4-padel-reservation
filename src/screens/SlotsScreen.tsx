@@ -18,6 +18,7 @@ import { isMine } from '../lib/mine';
 import { countDay, weeklyRemaining, countWeek } from '../lib/limits';
 import { recordBooking, markCancelled, bookingKey } from '../lib/bookingsDb';
 import { addRecentAction } from '../lib/recentActions';
+import { applyOverrides, addOverride } from '../lib/overrides';
 import { syncRegistration } from '../lib/pushClient';
 import { WEEKLY_LIMIT, DAILY_LIMIT, BOOKING_HORIZON_DAYS } from '../config';
 import type { Franja, Reservation, SlotView } from '../lib/types';
@@ -48,7 +49,7 @@ export function SlotsScreen() {
       // session-cached in the client, so warm loads only fetch reservations + the day block.
       const franjasFetched = await fetchFranjas(secret);
       const weekdayBlocks = await fetchWeekdayBlocks(secret);
-      const allReservations = await fetchAllReservations(secret, live);
+      const allReservations = applyOverrides(await fetchAllReservations(secret, live));
       const dayBlock = await fetchDayBlock(secret, selected);
       setAllRes(allReservations);
       setFranjas(franjasFetched);
@@ -74,13 +75,11 @@ export function SlotsScreen() {
       start: slot.franja.start, end: slot.franja.end, nombre: profile.nombre, vivienda: profile.vivienda.toUpperCase(),
       codigoUsed: profile.codigo, origin: 'app', status: 'active', createdAt: Date.now(),
     });
-    addRecentAction(selected, slot.franja.slot); void syncRegistration();
-    // Optimistic update (izar4 has read-after-write lag); reconcile silently after the lag clears.
-    const optimistic: Reservation = { id: r.id ?? 0, slot: slot.franja.slot, fecha: selected, nombre: profile.nombre, vivienda: profile.vivienda.toUpperCase() };
-    setAllRes((prev) => [...prev, optimistic]);
-    setSlots((prev) => prev?.map((s) => (s.franja.slot === slot.franja.slot ? { ...s, status: 'ocupado', reservation: optimistic } : s)) ?? prev);
+    addRecentAction(selected, slot.franja.slot);
+    addOverride({ key: bookingKey(selected, slot.franja.slot), type: 'add', res: { id: r.id ?? 0, slot: slot.franja.slot, fecha: selected, nombre: profile.nombre, vivienda: profile.vivienda.toUpperCase() } });
+    void syncRegistration();
+    await load(true, true);   // overrides keep this correct despite read-after-write lag
     setBookSlot(null);
-    window.setTimeout(() => { void load(true, true); }, 2000);
   }
 
   async function doCancel(slot: SlotView, codigo: string): Promise<boolean> {
@@ -88,11 +87,11 @@ export function SlotsScreen() {
     const r = await cancelReservation(secret, id, codigo);
     if (!r.ok) return false;
     await markCancelled(selected, slot.franja.slot, Date.now());
-    addRecentAction(selected, slot.franja.slot); void syncRegistration();
-    setAllRes((prev) => prev.filter((x) => !(x.fecha === selected && x.slot === slot.franja.slot)));
-    setSlots((prev) => prev?.map((s) => (s.franja.slot === slot.franja.slot ? { ...s, status: 'libre', reservation: null } : s)) ?? prev);
+    addRecentAction(selected, slot.franja.slot);
+    addOverride({ key: bookingKey(selected, slot.franja.slot), type: 'remove' });
+    void syncRegistration();
+    await load(true, true);   // overrides keep the counter/slots correct despite read-after-write lag
     setCancelSlot(null);
-    window.setTimeout(() => { void load(true, true); }, 2000);
     return true;
   }
 

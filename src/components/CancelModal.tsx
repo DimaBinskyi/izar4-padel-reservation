@@ -7,6 +7,7 @@ import { getBookingCode } from '../lib/bookingsDb';
 import { fetchReservationCode } from '../lib/izar4Client';
 import { getDeviceSecret } from '../lib/deviceSecret';
 import { planCancel, type CancelPlan } from '../lib/cancelPolicy';
+import { Spinner } from './Spinner';
 
 interface Props {
   slot: SlotView;        // must have slot.reservation
@@ -59,6 +60,11 @@ export function CancelModal({ slot, fecha, profile, onConfirm, onClose }: Props)
           <div style={row}><span style={{ color: '#8aa0bd' }}>{t('booking.slot')}</span><b>{slot.franja.start} – {slot.franja.end}</b></div>
           <div style={row}><span style={{ color: '#8aa0bd' }}>{t('cancel.yours')}</span><b>{profile.nombre} · {profile.vivienda}</b></div>
         </div>
+        {!plan && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#8aa0bd', marginBottom: 12 }}>
+            <Spinner /> {t('common.loading')}
+          </div>
+        )}
         {plan && plan.mode !== 'ask' && (
           <div style={{ fontSize: 12, color: '#7ee2a8', background: '#0e2018', border: '1px solid #234e34', borderRadius: 9, padding: '8px 10px', marginBottom: 12 }}>{t('cancel.codeRemembered')}</div>
         )}
@@ -72,7 +78,7 @@ export function CancelModal({ slot, fecha, profile, onConfirm, onClose }: Props)
         {error && <div style={{ fontSize: 12, color: '#ff9b9b', marginBottom: 10 }}>{error}</div>}
         <div style={{ display: 'flex', gap: 10 }}>
           <button style={{ flex: 1, padding: '12px 0', borderRadius: 12, border: 'none', background: '#16202e', color: '#cfe0f5', fontWeight: 700 }} onClick={onClose} disabled={busy}>{t('common.back')}</button>
-          <button style={{ flex: 1, padding: '12px 0', borderRadius: 12, border: 'none', background: '#b3261e', color: '#fff', fontWeight: 700, opacity: busy || !plan ? 0.6 : 1 }} onClick={go} disabled={busy || !plan}>{t('cancel.doCancel')}</button>
+          <button style={{ flex: 1, padding: '12px 0', borderRadius: 12, border: 'none', background: '#b3261e', color: '#fff', fontWeight: 700, opacity: busy || !plan ? 0.6 : 1 }} onClick={go} disabled={busy || !plan}>{busy ? <Spinner /> : t('cancel.doCancel')}</button>
         </div>
       </div>
     </div>
