@@ -165,6 +165,15 @@ Bottom tab bar (4): **Slots · Watch · Stats · Settings**. "My bookings" is re
     iOS shows Share → "Add to Home Screen" instructions; hidden when already running standalone.
     Re-offerable from Settings. (Added in Phase 2; reused by the notification flow's state A.)
 
+    **Install policy — offer, never force (you technically cannot force a PWA install):**
+    - The app is **fully usable in-browser** without installing (browse, book, cancel). Do not wall
+      the whole app behind install.
+    - **Soft nudge:** the dismissible banner appears contextually (after a first meaningful action /
+      2nd session), not on cold load; respect dismissal; re-offer from Settings.
+    - **Hard gate only where install is functionally required:** enabling notifications or creating an
+      auto-grab watch is gated behind install ("this needs the installed app"), because iOS push
+      requires an installed PWA. This is the only place install is "required".
+
 Mockups are saved under `.superpowers/brainstorm/` (gitignored).
 
 ---
