@@ -73,6 +73,21 @@ export default {
         return proxied(JSON.stringify(reservas));
       }
 
+      // App writes (book/cancel) proxy to izar4, but on success we ALSO patch the KV snapshot
+      // in-place so the next snapshot read reflects the change immediately — the client can then
+      // refresh from the fast snapshot (~80ms) instead of a slow full live re-fetch (up to 5 pages).
+      if (req.method === 'POST' && (url.pathname === '/api/wp-json/app/v1/reservar' || url.pathname === '/api/wp-json/app/v1/cancelar')) {
+        const isBook = url.pathname.endsWith('/reservar');
+        const reqBody = await req.text();
+        const upstream = await izar4Fetch(IZAR4 + url.pathname.replace(/^\/api/, '') + url.search, {
+          method: 'POST', headers: { 'content-type': req.headers.get('content-type') ?? 'application/json' }, body: reqBody,
+        });
+        const text = await upstream.text();
+        let data: any = {}; try { data = JSON.parse(text); } catch { /* non-JSON error body */ }
+        if (upstream.ok && data?.ok) await patchSnapshot(env, isBook, reqBody, data);
+        return new Response(text, { status: upstream.status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...CORS } });
+      }
+
       // default: proxy to izar4. izar4's WAF 503s on concurrent bursts, so retry on 503,
       // and short-cache static-ish GETs in KV so warm loads barely touch the origin.
       const path = url.pathname.replace(/^\/api/, '');   // e.g. "/wp-json/wp/v2/franjas"
@@ -169,6 +184,28 @@ async function fetchReservasPaged(): Promise<Resv[] | null> {
     vivienda: r.acf.vivienda_reservas ?? '',
     nombre: r.acf.nombre_reservas ?? '',
   }));
+}
+
+// Keep the KV snapshot in step with an app booking/cancel so reads reflect it without waiting for
+// the cron. Best-effort: any failure just leaves the cron / live reconcile to self-correct.
+// (No snapshot yet → skip; the next live read seeds it.) `slot`/`fecha` match the snapshot format
+// (id_franja_reservas, YYYYMMDD) used by fetchReservasPaged.
+async function patchSnapshot(env: Env, isBook: boolean, reqBody: string, resp: any): Promise<void> {
+  try {
+    const raw = await env.KV.get('snapshot');
+    if (!raw) return;
+    let snap = JSON.parse(raw) as Resv[];
+    const b = JSON.parse(reqBody);
+    if (isBook) {
+      const fecha = String(b.fecha), slot = String(b.idFranja);
+      snap = snap.filter((r) => !(r.fecha === fecha && r.slot === slot));
+      snap.push({ id: Number(resp.id ?? 0), fecha, slot, vivienda: String(b.vivienda ?? '').toUpperCase(), nombre: String(b.nombre ?? '') });
+    } else {
+      const idReserva = Number(b.idReserva);
+      snap = snap.filter((r) => r.id !== idReserva);
+    }
+    await env.KV.put('snapshot', JSON.stringify(snap));
+  } catch { /* best-effort */ }
 }
 
 async function runPoll(env: Env, now: Date): Promise<void> {

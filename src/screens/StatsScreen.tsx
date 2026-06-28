@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { listBookings, type BookingRecord } from '../lib/bookingsDb';
 import { aggregate, periodRange, type Period } from '../lib/stats';
 import { dateToYmd, ymdToDate } from '../lib/dates';
+import { PullToRefresh } from '../components/PullToRefresh';
 
 export function StatsScreen() {
   const { t, i18n } = useTranslation();
@@ -10,7 +11,8 @@ export function StatsScreen() {
   const [period, setPeriod] = useState<Period>('month');
   const [log, setLog] = useState<BookingRecord[]>([]);
 
-  useEffect(() => { listBookings().then(setLog).catch(() => setLog([])); }, []);
+  const loadLog = useCallback(async () => { try { setLog(await listBookings()); } catch { setLog([]); } }, []);
+  useEffect(() => { void loadLog(); }, [loadLog]);
 
   const range = useMemo(() => periodRange(period, today), [period, today]);
   const r = useMemo(() => aggregate(log, range, today), [log, range, today]);
@@ -42,6 +44,7 @@ export function StatsScreen() {
 
   return (
     <div style={{ maxWidth: 420, margin: '0 auto' }}>
+      <PullToRefresh onRefresh={loadLog}>
       <header style={{ textAlign: 'center', padding: '12px 0', fontSize: 17, fontWeight: 700 }}>{t('stats.title')}</header>
       <div style={{ display: 'flex', gap: 6, padding: '0 14px 12px' }}>
         {periods.map((p) => (
@@ -83,6 +86,7 @@ export function StatsScreen() {
           );
         })}
       </div>
+      </PullToRefresh>
     </div>
   );
 }

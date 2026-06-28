@@ -1,7 +1,8 @@
 :root { color-scheme: dark; }
 * { box-sizing: border-box; }
 body { margin: 0; background: #0b0f17; color: #e7eefb;
-  font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif; }
+  font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+  overscroll-behavior-y: contain; }  /* let the custom pull-to-refresh own the top overscroll */
 button { font: inherit; }
 input, select, textarea { font-size: 16px; }  /* iOS: <16px focuses-zoom */
 

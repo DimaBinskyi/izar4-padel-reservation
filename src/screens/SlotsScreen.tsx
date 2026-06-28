@@ -7,6 +7,7 @@ import { BookingModal } from '../components/BookingModal';
 import { CancelModal } from '../components/CancelModal';
 import { WatchSheet } from '../components/WatchSheet';
 import { Spinner } from '../components/Spinner';
+import { PullToRefresh } from '../components/PullToRefresh';
 import { deriveSlots } from '../lib/status';
 import {
   fetchFranjas, fetchAllReservations, fetchWeekdayBlocks, fetchDayBlocks,
@@ -64,7 +65,22 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     } catch { setError(t('slots.error')); }
   }, [secret, t]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); }, [load]);   // instant: render from the snapshot
+
+  // Refresh from the snapshot when the app/tab regains focus. The snapshot is kept current by the
+  // cron AND by the Worker patching it on every app booking/cancel, so this stays consistent with
+  // the user's own actions. (We deliberately do NOT auto-fetch live izar4 here: its read-after-write
+  // lag can momentarily drop a just-made booking, which mis-counted the weekly limit. Pull-to-refresh
+  // is the explicit "fetch live now" action.)
+  useEffect(() => {
+    const reconcile = () => { if (document.visibilityState === 'visible') void load(false); };
+    document.addEventListener('visibilitychange', reconcile);
+    window.addEventListener('focus', reconcile);
+    return () => {
+      document.removeEventListener('visibilitychange', reconcile);
+      window.removeEventListener('focus', reconcile);
+    };
+  }, [load]);
 
   // Jump to a slot (from My bookings): switch date, refresh, then blink it for 3s.
   // Snapshot read (not live) — all dates are already in `allRes`, and overrides keep recent
@@ -104,8 +120,8 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     addRecentAction(selected, slot.franja.slot);
     addOverride({ key: bookingKey(selected, slot.franja.slot), type: 'add', res: { id: r.id ?? 0, slot: slot.franja.slot, fecha: selected, nombre: profile.nombre, vivienda: profile.vivienda.toUpperCase() } });
     void syncRegistration();
-    await load(true);
-    setBookSlot(null);
+    await load();                // refresh from the snapshot (worker patched it on the write) — fast,
+    setBookSlot(null);           // and real: the modal closes only after the confirmed state is loaded
   }
 
   async function doCancel(slot: SlotView, codigo: string): Promise<boolean> {
@@ -116,7 +132,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     addRecentAction(selected, slot.franja.slot);
     addOverride({ key: bookingKey(selected, slot.franja.slot), type: 'remove' });
     void syncRegistration();
-    await load(true);
+    await load();                // snapshot refresh (worker patched it on the cancel) — fast + real
     setCancelSlot(null);
     return true;
   }
@@ -135,6 +151,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
 
   return (
     <div style={{ maxWidth: 420, margin: '0 auto' }}>
+      <PullToRefresh onRefresh={() => load(true)}>
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px' }}>
         <button aria-label="watch" onClick={() => setWatchOpen(true)}
           style={{ border: 'none', background: '#16202e', color: '#cfe0f5', borderRadius: 8, padding: '6px 10px', fontSize: 12 }}>🎯 {t('watch.title')}</button>
@@ -168,6 +185,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
             onBook={() => tryBook(s)} onCancel={() => setCancelSlot(s)} onWatch={() => setWatchOpen(true)} />
         ))}
       </div>
+      </PullToRefresh>
 
       {(needProfile || editingProfile) && (
         <ProfileModal initial={profile} mode={needProfile ? 'fill' : 'edit'}
@@ -176,7 +194,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
       )}
       {bookSlot && profile && (
         <BookingModal slot={bookSlot} fecha={selected} profile={profile}
-          weeklyCountAfter={countWeek(allRes, profile.vivienda, selected) + 1}
+          weeklyRemainingAfter={Math.max(0, WEEKLY_LIMIT - (countWeek(allRes, profile.vivienda, selected) + 1))}
           onConfirm={() => doBook(bookSlot)} onClose={() => setBookSlot(null)} />
       )}
       {cancelSlot && profile && cancelSlot.reservation && (

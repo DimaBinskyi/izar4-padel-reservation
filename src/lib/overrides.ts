@@ -7,7 +7,10 @@ import type { Reservation } from './types';
 interface Override { key: string; type: 'add' | 'remove'; res?: Reservation; ts: number }
 
 const KEY = 'padel_overrides';
-const WINDOW_MS = 3 * 60 * 1000;
+// Bridges only the brief read-after-write lag (izar4 list / KV) until the patched snapshot reflects
+// the write. Kept short so an externally-cancelled booking isn't masked for long (it self-heals as
+// soon as a fetch agrees, or expires here).
+const WINDOW_MS = 60 * 1000;
 
 function load(): Override[] {
   try {

@@ -22,7 +22,7 @@
   "booking": {
     "title": "Confirmar reserva",
     "resource": "Recurso", "date": "Fecha", "slot": "Turno",
-    "bookingAs": "Reservo como", "afterWeekly": "Tras reservar: {{n}}/{{limit}} esta semana",
+    "bookingAs": "Reservo como", "afterWeekly": "Tras reservar quedan {{n}}/{{limit}} en la semana del {{week}}",
     "limitReachedWeek": "Límite de {{limit}} reservas por semana alcanzado.",
     "limitReachedDay": "Ya tienes una reserva ese día (1 por día).",
     "error": "Error al reservar. Inténtalo de nuevo."

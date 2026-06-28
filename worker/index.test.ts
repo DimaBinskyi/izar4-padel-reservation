@@ -77,4 +77,26 @@ describe('worker proxy', () => {
     expect(init.method).toBe('POST');
     expect(init.body).toBe(body);
   });
+
+  it('a successful book patches the snapshot in place (so the client can refresh from snapshot, not a full live re-fetch)', async () => {
+    const store = new Map<string, string>([['snapshot', '[]']]);
+    const env = { ...ENV, KV: { get: async (k: string) => store.get(k) ?? null, put: async (k: string, v: string) => { store.set(k, v); } } } as any;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{"ok":true,"id":99}', { status: 200, headers: { 'content-type': 'application/json' } }));
+    const body = JSON.stringify({ idFranja: 'P1-1', fecha: '20260703', nombre: 'Ana', vivienda: 'a1', idTermino: 12 });
+    const req = new Request('https://app.dev/api/wp-json/app/v1/reservar', { method: 'POST', headers: { 'x-device-secret': 's3cret', 'content-type': 'application/json' }, body });
+    const res = await worker.fetch(req, env);
+    expect(JSON.parse(await res.text())).toEqual({ ok: true, id: 99 });
+    expect(JSON.parse(store.get('snapshot')!)).toEqual([{ id: 99, fecha: '20260703', slot: 'P1-1', vivienda: 'A1', nombre: 'Ana' }]);
+  });
+
+  it('a successful cancel removes the reservation from the snapshot', async () => {
+    const seed = [{ id: 5, fecha: '20260703', slot: 'P1-1', vivienda: 'A1', nombre: 'Ana' }, { id: 6, fecha: '20260704', slot: 'P1-2', vivienda: 'B2', nombre: 'Bob' }];
+    const store = new Map<string, string>([['snapshot', JSON.stringify(seed)]]);
+    const env = { ...ENV, KV: { get: async (k: string) => store.get(k) ?? null, put: async (k: string, v: string) => { store.set(k, v); } } } as any;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{"ok":true}', { status: 200, headers: { 'content-type': 'application/json' } }));
+    const body = JSON.stringify({ idReserva: 5, codigo: 'x' });
+    const req = new Request('https://app.dev/api/wp-json/app/v1/cancelar', { method: 'POST', headers: { 'x-device-secret': 's3cret', 'content-type': 'application/json' }, body });
+    await worker.fetch(req, env);
+    expect(JSON.parse(store.get('snapshot')!)).toEqual([{ id: 6, fecha: '20260704', slot: 'P1-2', vivienda: 'B2', nombre: 'Bob' }]);
+  });
 });

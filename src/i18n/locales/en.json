@@ -22,7 +22,7 @@
   "booking": {
     "title": "Confirm booking",
     "resource": "Resource", "date": "Date", "slot": "Slot",
-    "bookingAs": "Booking as", "afterWeekly": "After booking: {{n}}/{{limit}} this week",
+    "bookingAs": "Booking as", "afterWeekly": "After booking: {{n}}/{{limit}} left for the week of {{week}}",
     "limitReachedWeek": "Weekly limit of {{limit}} bookings reached.",
     "limitReachedDay": "You already have a booking that day (1 per day).",
     "error": "Booking failed. Try again."

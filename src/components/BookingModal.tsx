@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { Profile } from '../lib/profile';
 import type { SlotView } from '../lib/types';
 import { ymdToDate } from '../lib/dates';
+import { weekRange } from '../lib/limits';
 import { WEEKLY_LIMIT } from '../config';
 import { Spinner } from './Spinner';
 
@@ -10,7 +11,7 @@ interface Props {
   slot: SlotView;
   fecha: string;
   profile: Profile;
-  weeklyCountAfter: number;   // count this booking would make (current + 1)
+  weeklyRemainingAfter: number;   // weekly bookings that would remain after this one (matches the header's remaining badge)
   onConfirm: () => Promise<void>;
   onClose: () => void;
 }
@@ -19,12 +20,17 @@ const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 
 const sheet: React.CSSProperties = { width: '100%', maxWidth: 420, background: '#101826', borderTopLeftRadius: 20, borderTopRightRadius: 20, borderTop: '1px solid #243246', padding: '14px 16px 18px' };
 const row: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 13 };
 
-export function BookingModal({ slot, fecha, profile, weeklyCountAfter, onConfirm, onClose }: Props) {
+export function BookingModal({ slot, fecha, profile, weeklyRemainingAfter, onConfirm, onClose }: Props) {
   const { t, i18n } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const d = ymdToDate(fecha);
   const dateStr = new Intl.DateTimeFormat(i18n.language, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(d);
+  // The weekly limit is counted in the BOOKING's Mon–Sun week, not "today's" week. Show that range
+  // explicitly so a next-week booking doesn't look like it's counting the current week.
+  const { monday, sunday } = weekRange(fecha);
+  const fmtShort = (ymd: string) => new Intl.DateTimeFormat(i18n.language, { day: 'numeric', month: 'short' }).format(ymdToDate(ymd));
+  const weekStr = `${fmtShort(monday)} – ${fmtShort(sunday)}`;
 
   async function go() {
     setBusy(true); setError(null);
@@ -47,7 +53,7 @@ export function BookingModal({ slot, fecha, profile, weeklyCountAfter, onConfirm
           <div style={row}><span style={{ color: '#8aa0bd' }}>{t('profile.cancelCode')}</span><b style={{ fontFamily: 'monospace' }}>{profile.codigo}</b></div>
         </div>
         <div style={{ fontSize: 12, color: '#7ee2a8', margin: '0 0 12px' }}>
-          {t('booking.afterWeekly', { n: weeklyCountAfter, limit: WEEKLY_LIMIT })}
+          {t('booking.afterWeekly', { n: weeklyRemainingAfter, limit: WEEKLY_LIMIT, week: weekStr })}
         </div>
         {error && <div style={{ fontSize: 12, color: '#ff9b9b', marginBottom: 10 }}>{error}</div>}
         <div style={{ display: 'flex', gap: 10 }}>

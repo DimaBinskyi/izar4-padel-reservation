@@ -8,6 +8,7 @@ import { addRecentAction } from '../lib/recentActions';
 import { applyOverrides, addOverride } from '../lib/overrides';
 import { syncRegistration } from '../lib/pushClient';
 import { isMine } from '../lib/mine';
+import { PullToRefresh } from '../components/PullToRefresh';
 import { dateToYmd, ymdToDate } from '../lib/dates';
 import type { Profile } from '../lib/profile';
 import type { Franja, Reservation, SlotView } from '../lib/types';
@@ -20,11 +21,10 @@ export function MyBookingsScreen({ profile, onOpenSlot }: { profile: Profile; on
   const [error, setError] = useState<string | null>(null);
   const [cancelRow, setCancelRow] = useState<{ res: Reservation; franja: Franja } | null>(null);
 
-  const load = useCallback(async () => {
-    setRows(null);
-    setError(null);
+  const load = useCallback(async (live = false) => {
+    if (!live) { setRows(null); setError(null); }   // only show the skeleton on the instant (snapshot) pass
     try {
-      const [allRaw, franjas, log] = await Promise.all([fetchAllReservations(secret), fetchFranjas(secret), listBookings()]);
+      const [allRaw, franjas, log] = await Promise.all([fetchAllReservations(secret, live), fetchFranjas(secret), listBookings()]);
       const all = applyOverrides(allRaw);
       const fmap = new Map(franjas.map((f) => [f.slot, f]));
       const lmap = new Map<string, BookingRecord>(log.map((r) => [`${r.fecha}|${r.slot}`, r]));
@@ -39,11 +39,23 @@ export function MyBookingsScreen({ profile, onOpenSlot }: { profile: Profile; on
         });
       setRows(mine);
     } catch {
-      setError(t('slots.error'));
+      if (!live) setError(t('slots.error'));
     }
   }, [secret, today, profile, t]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); }, [load]);   // instant: render from the snapshot
+
+  // Refresh from the snapshot on focus (snapshot is kept current by the cron + Worker write-patches).
+  // Live izar4 is fetched only on explicit pull-to-refresh (its read-after-write lag is unreliable).
+  useEffect(() => {
+    const reconcile = () => { if (document.visibilityState === 'visible') void load(false); };
+    document.addEventListener('visibilitychange', reconcile);
+    window.addEventListener('focus', reconcile);
+    return () => {
+      document.removeEventListener('visibilitychange', reconcile);
+      window.removeEventListener('focus', reconcile);
+    };
+  }, [load]);
 
   async function doCancel(res: Reservation, codigo: string): Promise<boolean> {
     const r = await cancelReservation(secret, res.id, codigo);
@@ -63,6 +75,7 @@ export function MyBookingsScreen({ profile, onOpenSlot }: { profile: Profile; on
 
   return (
     <div style={{ maxWidth: 420, margin: '0 auto' }}>
+      <PullToRefresh onRefresh={() => load(true)}>
       <header style={{ textAlign: 'center', padding: '12px 0', fontSize: 17, fontWeight: 700 }}>{t('mybookings.title')}</header>
       <div style={{ padding: '0 14px 8px', fontSize: 11.5, color: '#8aa0bd' }}>{t('mybookings.subtitle')}</div>
       {error && <div style={{ padding: 16, color: '#ff9b9b' }}>{error}</div>}
@@ -84,6 +97,7 @@ export function MyBookingsScreen({ profile, onOpenSlot }: { profile: Profile; on
           );
         })}
       </div>
+      </PullToRefresh>
       {cancelRow && (
         <CancelModal
           slot={{ franja: cancelRow.franja, status: 'ocupado', reservation: cancelRow.res } as SlotView}
