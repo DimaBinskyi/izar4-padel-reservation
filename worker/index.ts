@@ -63,6 +63,12 @@ export default {
           if (snap) return proxied(snap);
         }
         const reservas = await fetchReservasPaged();
+        // A failed/partial upstream fetch (izar4 WAF 503s on bursts) must NOT overwrite the
+        // snapshot — that would blank every day's slots. Fall back to the last good snapshot.
+        if (reservas === null) {
+          const snap = await env.KV.get('snapshot');
+          return proxied(snap ?? '[]');
+        }
         await env.KV.put('snapshot', JSON.stringify(reservas));
         return proxied(JSON.stringify(reservas));
       }
@@ -143,12 +149,15 @@ interface Resv { id: number; fecha: string; slot: string; vivienda: string; nomb
 
 // Paginated fetch of all padel reservations from izar4 (with retry). Used by the cron and the
 // /api/reservas?live=1 endpoint; the result is stored as the KV 'snapshot' for fast reads.
-async function fetchReservasPaged(): Promise<Resv[]> {
+// Returns `null` (NOT `[]`) when the upstream fetch fails, so callers can tell "izar4 is
+// unavailable, keep the last good snapshot" apart from "there are genuinely zero reservations".
+async function fetchReservasPaged(): Promise<Resv[] | null> {
   const raw: any[] = [];
   for (let page = 1; page <= 5; page++) {
     const res = await izar4Fetch(`${IZAR4}/wp-json/wp/v2/reservas?per_page=100&page=${page}&recurso=${TERM}&_fields=id,acf`,
       { method: 'GET', headers: { 'content-type': 'application/json' } });
-    if (!res.ok) break;
+    if (res.status === 400) break;   // WordPress 'invalid page number' → past the last page; list is complete
+    if (!res.ok) return null;        // real upstream failure (503/timeout) → don't return a partial/empty list
     const arr = (await res.json()) as any[];
     raw.push(...arr);
     if (arr.length < 100) break;
@@ -169,6 +178,7 @@ async function runPoll(env: Env, now: Date): Promise<void> {
   for (const f of franjasRaw) franjas[f.title?.rendered ?? ''] = { start: (f.acf?.hora_inicio_franjas ?? '00:00').slice(0, 5) };
 
   const reservas = await fetchReservasPaged();
+  if (reservas === null) return;   // izar4 unavailable this cycle → keep the last good snapshot, skip the diff
   const occupied = reservas.map((r) => `${r.fecha}|${r.slot}`);
 
   // 2. diff vs snapshot (snapshot stores full reservas with owners)

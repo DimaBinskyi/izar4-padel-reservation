@@ -51,7 +51,8 @@ worker/      Cloudflare Worker — KV + Cron + Web Push (VAPID)      (added duri
 - Server ignores its own rule limits (7-day / 3-week / 1-day) — verified by testing.
 - Date formats vary (`YYYYMMDD` vs `dd/mm/yyyy`); weekday codes `D L M X J V S` (Sun=0).
 - izar4's WAF **503s on concurrent request bursts** → the client loads sequentially + session-caches static data (franjas/blocks/inmuebles); the Worker proxy retries 503 and KV-caches static GETs.
-- Reservations come from the cron-maintained KV **snapshot** via `GET /api/reservas` (~80ms vs 0.5–6s direct); `?live=1` forces a fresh fetch (used right after a write).
+- Reservations come from the cron-maintained KV **snapshot** via `GET /api/reservas` (~80ms vs 0.5–6s direct); `?live=1` forces a fresh fetch. **Use `live=1` only right after a write** (read-after-write reconcile) — NOT on day navigation; the snapshot already holds every date, so the client derives the new day's slots from it instantly. Forcing `live` on navigation is slow and risks snapshot poisoning (below).
+- **Never overwrite the snapshot with a failed/partial fetch.** izar4's WAF can 503 mid-fetch; `fetchReservasPaged()` returns `null` on upstream failure (vs `[]` for genuinely zero). Both the `live=1` endpoint and the cron must keep the last good snapshot when it's `null` — otherwise every day's slots render empty/free until the next good poll ("empty slots" bug).
 - The Worker proxy's cacheable-path check matches the full path `/wp-json/wp/v2/...` (NOT `/wp/v2/...`) — a mismatch silently disables caching.
 
 ## Testing rule (IMPORTANT)

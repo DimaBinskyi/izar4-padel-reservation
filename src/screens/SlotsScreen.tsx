@@ -67,8 +67,10 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
   useEffect(() => { void load(); }, [load]);
 
   // Jump to a slot (from My bookings): switch date, refresh, then blink it for 3s.
+  // Snapshot read (not live) — all dates are already in `allRes`, and overrides keep recent
+  // actions correct; a live refetch here is slow and can poison the snapshot on a WAF 503.
   useEffect(() => {
-    if (focus) { setSelected(focus.fecha); setHighlightSlot(focus.slot); void load(true); onFocusConsumed?.(); }
+    if (focus) { setSelected(focus.fecha); setHighlightSlot(focus.slot); void load(); onFocusConsumed?.(); }
   }, [focus, onFocusConsumed, load]);
   useEffect(() => {
     if (!highlightSlot) return;
@@ -82,7 +84,10 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
   function goToDate(d: string) {
     setSelected(d);
     setHighlightSlot(null);
-    void load(true);  // refresh on day change
+    // Snapshot refresh only. The snapshot already holds every date, so the new day renders
+    // instantly from `allRes`; forcing a live izar4 fetch here is slow and risks overwriting
+    // the snapshot with an empty result when izar4's WAF 503s (slots would then show empty).
+    void load();
   }
 
   async function doBook(slot: SlotView) {
