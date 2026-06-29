@@ -39,6 +39,22 @@ export function addDays(ymd: string, days: number): string {
   return dateToYmd(d);
 }
 
+export function addMonths(ymd: string, months: number): string {
+  const d = ymdToDate(ymd);
+  d.setMonth(d.getMonth() + months);
+  return dateToYmd(d);
+}
+
+// YYYYMMDD ⇄ YYYY-MM-DD (the value/format an <input type="date"> uses).
+export function ymdToISO(ymd: string): string {
+  const m = /^(\d{4})(\d{2})(\d{2})$/.exec(ymd);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : ymd;
+}
+export function isoToYmd(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[1]}${m[2]}${m[3]}` : iso;
+}
+
 function atMidnight(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }

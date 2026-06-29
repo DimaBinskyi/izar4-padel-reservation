@@ -55,3 +55,19 @@ export async function markCancelled(fecha: string, slot: string, when: number): 
 export async function listBookings(): Promise<BookingRecord[]> {
   return (await db()).getAll('bookings');
 }
+
+// Remove records by key (the user multi-selecting history rows to delete). Local-only — does NOT
+// touch izar4; a still-active izar4 booking re-appears on the next pull.
+export async function deleteBookings(keys: string[]): Promise<void> {
+  const d = await db();
+  const tx = d.transaction('bookings', 'readwrite');
+  await Promise.all(keys.map((k) => tx.store.delete(k)));
+  await tx.done;
+}
+
+// TTL: drop records whose game date is older than `beforeYmd` (kept ~3 months). Returns how many.
+export async function pruneOldBookings(beforeYmd: string): Promise<number> {
+  const old = (await listBookings()).filter((r) => r.fecha < beforeYmd);
+  if (old.length) await deleteBookings(old.map((r) => r.key));
+  return old.length;
+}

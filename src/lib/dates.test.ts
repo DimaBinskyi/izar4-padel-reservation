@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ymdToDate, dateToYmd, normalizeYmd, weekdayCode, addDays, isPastYmd, isTodayYmd } from './dates';
+import { ymdToDate, dateToYmd, normalizeYmd, weekdayCode, addDays, addMonths, ymdToISO, isoToYmd, isPastYmd, isTodayYmd } from './dates';
 
 describe('dates', () => {
   it('ymdToDate / dateToYmd round-trip', () => {
@@ -23,6 +23,16 @@ describe('dates', () => {
 
   it('addDays returns Ymd offset', () => {
     expect(addDays('20260627', 21)).toBe('20260718');
+  });
+
+  it('addMonths shifts by calendar months', () => {
+    expect(addMonths('20260627', -3)).toBe('20260327');
+    expect(addMonths('20260115', 1)).toBe('20260215');
+  });
+
+  it('ymdToISO / isoToYmd round-trip', () => {
+    expect(ymdToISO('20260627')).toBe('2026-06-27');
+    expect(isoToYmd('2026-06-27')).toBe('20260627');
   });
 
   it('isTodayYmd / isPastYmd relative to a reference date', () => {

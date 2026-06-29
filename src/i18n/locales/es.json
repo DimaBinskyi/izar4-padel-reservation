@@ -32,6 +32,7 @@
     "back": "Volver",
     "confirm": "Confirmar",
     "edit": "Editar",
+    "delete": "Eliminar",
     "loading": "Cargando…"
   },
   "profile": {
@@ -99,7 +100,15 @@
     "hours": "Horas en pista",
     "hUnit": "h",
     "history": "Historial",
-    "none": "—"
+    "none": "—",
+    "range2w": "±2 sem",
+    "from": "Desde",
+    "to": "Hasta",
+    "selected": "Seleccionados: {{n}}",
+    "deleteN": "Eliminar ({{n}})",
+    "deleteTitle": "¿Eliminar registros?",
+    "deleteBody": "¿Eliminar {{n}} de las estadísticas locales? No cancela las reservas en izar4.",
+    "selectHint": "Mantén pulsado para seleccionar y eliminar"
   },
   "settings": {
     "title": "Ajustes",

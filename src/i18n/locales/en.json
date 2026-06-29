@@ -32,6 +32,7 @@
     "back": "Back",
     "confirm": "Confirm",
     "edit": "Edit",
+    "delete": "Delete",
     "loading": "Loading…"
   },
   "profile": {
@@ -99,7 +100,15 @@
     "hours": "Hours on court",
     "hUnit": "h",
     "history": "History",
-    "none": "—"
+    "none": "—",
+    "range2w": "±2 wk",
+    "from": "From",
+    "to": "To",
+    "selected": "Selected: {{n}}",
+    "deleteN": "Delete ({{n}})",
+    "deleteTitle": "Delete records?",
+    "deleteBody": "Delete {{n}} from local stats? This does not cancel the izar4 bookings.",
+    "selectHint": "Long-press a row to select and delete"
   },
   "settings": {
     "title": "Settings",
