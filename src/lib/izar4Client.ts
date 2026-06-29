@@ -13,11 +13,26 @@ async function get(path: string, secret: string): Promise<Response> {
 }
 
 // Static-ish data (franjas, weekday blocks, dwellings) rarely changes — cache per session to
-// avoid re-hitting izar4 (whose WAF throttles concurrent bursts) on every screen load.
+// avoid re-hitting izar4 (whose WAF throttles concurrent bursts) on every screen load. We also
+// persist static-ish data to localStorage with a TTL so COLD opens (new JS context) don't re-fetch
+// it from izar4 every time — only reservations are truly dynamic.
+const DAY_MS = 86_400_000;
+function lsGet<T>(key: string, ttlMs: number): T | null {
+  try {
+    const o = JSON.parse(localStorage.getItem(key) ?? 'null') as { ts: number; v: T } | null;
+    return o && Date.now() - o.ts < ttlMs ? o.v : null;
+  } catch { return null; }
+}
+function lsSet(key: string, v: unknown): void {
+  try { localStorage.setItem(key, JSON.stringify({ ts: Date.now(), v })); } catch { /* quota / no storage */ }
+}
+
 let _franjasCache: Franja[] | null = null;
 
 export async function fetchFranjas(secret: string): Promise<Franja[]> {
   if (_franjasCache) return _franjasCache;
+  const ls = lsGet<Franja[]>('padel_cache_franjas', DAY_MS);   // slot structure never really changes
+  if (ls) return (_franjasCache = ls);
   const r = await get(`/wp/v2/franjas?per_page=100&recurso=${PADEL_TERM_ID}&_fields=id,slug,title,acf`, secret);
   const data = (await r.json()) as any[];
   _franjasCache = data.map((f) => ({
@@ -27,6 +42,7 @@ export async function fetchFranjas(secret: string): Promise<Franja[]> {
     end: (f.acf?.hora_fin_franjas ?? '--:--').slice(0, 5),
     order: Number(f.acf?.orden_franjas ?? 999),
   }));
+  lsSet('padel_cache_franjas', _franjasCache);
   return _franjasCache;
 }
 
@@ -48,6 +64,8 @@ let _blocksCache: WeekdayBlockSet | null = null;
 
 export async function fetchWeekdayBlocks(secret: string): Promise<WeekdayBlockSet> {
   if (_blocksCache) return _blocksCache;
+  const ls = lsGet<WeekdayBlockSet>('padel_cache_wblocks', DAY_MS);   // recurring weekly closures — rarely change
+  if (ls) return (_blocksCache = ls);
   const r = await get(`/wp/v2/bloqueos?per_page=100&recurso=${PADEL_TERM_ID}&_fields=id,acf`, secret);
   const data = (await r.json()) as any[];
   const set: WeekdayBlockSet = {};
@@ -57,6 +75,7 @@ export async function fetchWeekdayBlocks(secret: string): Promise<WeekdayBlockSe
     if (slot && dia) set[`${slot}_${dia}`] = true;
   }
   _blocksCache = set;
+  lsSet('padel_cache_wblocks', set);
   return set;
 }
 
@@ -68,9 +87,15 @@ export async function fetchDayBlock(secret: string, fecha: string): Promise<DayB
 }
 
 let _inmueblesCache: string[] | null = null;
+let _dayBlocksCache: Record<string, string> | null = null;
 
 // All date-blocks as a map { YYYYMMDD: motivo } — lets any day be checked without a per-date fetch.
+// Cached per session + localStorage (15 min) — whole-day closures are admin-set and rarely change,
+// so we don't re-fetch this slow endpoint on every load.
 export async function fetchDayBlocks(secret: string): Promise<Record<string, string>> {
+  if (_dayBlocksCache) return _dayBlocksCache;
+  const ls = lsGet<Record<string, string>>('padel_cache_dblocks', 15 * 60_000);
+  if (ls) return (_dayBlocksCache = ls);
   const r = await get(`/wp/v2/bloqueos-fecha?per_page=100&recurso=${PADEL_TERM_ID}&_fields=id,acf`, secret);
   const data = (await r.json()) as any[];
   const map: Record<string, string> = {};
@@ -79,6 +104,8 @@ export async function fetchDayBlocks(secret: string): Promise<Record<string, str
     const f = normalizeYmd(b.acf['fecha_bloqueo_bloqueos-fecha']);
     if (f) map[f] = b.acf['motivo_bloqueos-fecha'] ?? '';
   }
+  _dayBlocksCache = map;
+  lsSet('padel_cache_dblocks', map);
   return map;
 }
 
@@ -141,6 +168,17 @@ export function resetClientCaches(): void {
   _franjasCache = null;
   _blocksCache = null;
   _inmueblesCache = null;
+  _dayBlocksCache = null;
+  try { ['padel_cache_franjas', 'padel_cache_wblocks', 'padel_cache_dblocks'].forEach((k) => localStorage.removeItem(k)); } catch { /* no storage */ }
+}
+
+// Drop the static caches (slots + weekday/date blocks) so the NEXT fetch re-pulls them fresh from
+// izar4. Called on pull-to-refresh — the user is explicitly asking for fully-fresh data.
+export function clearStaticCaches(): void {
+  _franjasCache = null;
+  _blocksCache = null;
+  _dayBlocksCache = null;
+  try { ['padel_cache_franjas', 'padel_cache_wblocks', 'padel_cache_dblocks'].forEach((k) => localStorage.removeItem(k)); } catch { /* no storage */ }
 }
 
 // Reads from the Worker's cron-maintained KV snapshot (fast). Pass live=true to force a fresh

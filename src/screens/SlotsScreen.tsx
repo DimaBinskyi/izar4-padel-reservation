@@ -11,7 +11,7 @@ import { PullToRefresh } from '../components/PullToRefresh';
 import { deriveSlots } from '../lib/status';
 import {
   fetchFranjas, fetchAllReservations, fetchWeekdayBlocks, fetchDayBlocks,
-  createReservation, cancelReservation,
+  createReservation, cancelReservation, clearStaticCaches,
 } from '../lib/izar4Client';
 import { getDeviceSecret } from '../lib/deviceSecret';
 import { dateToYmd, addDays } from '../lib/dates';
@@ -91,6 +91,13 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     setRefreshing(false); setIsFresh(true);
   }, [load]);
 
+  // Pull-to-refresh: also drop the static caches (slots + weekday/date blocks) so EVERYTHING re-pulls
+  // fresh from izar4, then the live reservation fetch feeds the Worker's snapshot (inside load(true)).
+  const pullRefresh = useCallback(async () => {
+    clearStaticCaches();
+    await forceLive();
+  }, [forceLive]);
+
   // On open: render the Worker snapshot instantly (fast cache, with its "cached · HH:MM" time), then
   // pull live current data directly from izar4 (user IP, ~fast) and replace it.
   useEffect(() => { void (async () => { await load(false); await forceLive(); })(); }, [load, forceLive]);
@@ -169,7 +176,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
 
   return (
     <div style={{ maxWidth: 420, margin: '0 auto' }}>
-      <PullToRefresh onRefresh={forceLive}>
+      <PullToRefresh onRefresh={pullRefresh}>
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px' }}>
         <button aria-label="watch" onClick={() => setWatchOpen(true)}
           style={{ border: 'none', background: '#16202e', color: '#cfe0f5', borderRadius: 8, padding: '6px 10px', fontSize: 12 }}>🎯 {t('watch.title')}</button>

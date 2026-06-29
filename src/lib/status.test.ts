@@ -55,6 +55,14 @@ describe('deriveSlots', () => {
     });
     expect(out[0].status).toBe('pasado');
     expect(out[1].status).toBe('ocupado');
+    expect(out[1].past).toBe(true);   // occupied but elapsed → no actions (no watch/cancel button)
     expect(out[2].status).toBe('pasado');
+  });
+
+  it('a future occupied slot is not past (watch allowed)', () => {
+    const now = new Date(2026, 5, 27, 8, 0);   // before all slots, same day
+    const out = deriveSlots({ fecha: '20260627', franjas, reservations: res /* P1-2 */, weekdayBlocks: {}, dayBlocked: false, now });
+    expect(out[1].status).toBe('ocupado');
+    expect(out[1].past).toBe(false);
   });
 });

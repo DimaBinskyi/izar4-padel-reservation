@@ -26,15 +26,15 @@ export function deriveSlots(input: DeriveInput): SlotView[] {
 
   return byNum.map((franja): SlotView => {
     const reservation = resBySlot.get(franja.slot) ?? null;
+    // The slot's start time has elapsed (whole past date, or today and we're past its start). This is
+    // independent of status — an occupied slot in the past is still `ocupado` but allows no actions.
+    const elapsed = past || (today && nowMin >= minutes(franja.start));
     if (dayBlocked || weekdayBlocks[`${franja.slot}_${wd}`]) {
-      return { franja, status: 'bloqueado', reservation: null };
+      return { franja, status: 'bloqueado', reservation: null, past: elapsed };
     }
-    if (reservation) return { franja, status: 'ocupado', reservation };
+    if (reservation) return { franja, status: 'ocupado', reservation, past: elapsed };
     // free slot
-    if (past) return { franja, status: 'pasado', reservation: null };
-    if (today && nowMin >= minutes(franja.start)) {
-      return { franja, status: 'pasado', reservation: null };
-    }
-    return { franja, status: 'libre', reservation: null };
+    if (elapsed) return { franja, status: 'pasado', reservation: null, past: true };
+    return { franja, status: 'libre', reservation: null, past: false };
   });
 }

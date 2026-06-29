@@ -50,11 +50,11 @@ export function SlotRow({ slot, mine, canBook, highlight, onBook, onCancel, onWa
           <button onClick={onBook} aria-label="book"
             style={{ width: 34, height: 34, borderRadius: 10, border: 'none', background: '#1d4ed8', color: '#fff', fontSize: 17, fontWeight: 700 }}>+</button>
         )}
-        {slot.status === 'ocupado' && mine && (
+        {slot.status === 'ocupado' && mine && !slot.past && (
           <button onClick={onCancel} aria-label="cancel"
             style={{ width: 34, height: 34, borderRadius: 10, border: 'none', background: '#3a1620', color: '#ff8a8a', fontSize: 17, fontWeight: 700 }}>×</button>
         )}
-        {slot.status === 'ocupado' && !mine && (
+        {slot.status === 'ocupado' && !mine && !slot.past && (
           <button onClick={onWatch} aria-label="watch"
             style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid #4a3a12', background: '#221a06', color: '#f2c14e', fontSize: 15 }}>🎯</button>
         )}

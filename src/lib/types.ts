@@ -24,4 +24,5 @@ export interface SlotView {
   franja: Franja;
   status: SlotStatus;
   reservation: Reservation | null;   // present when ocupado
+  past: boolean;                     // slot's start time has elapsed (no actions: no book/watch/cancel)
 }
