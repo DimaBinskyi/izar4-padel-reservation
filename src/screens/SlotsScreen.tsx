@@ -239,7 +239,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
         <CancelModal slot={cancelSlot} fecha={selected} profile={profile}
           onConfirm={(codigo) => doCancel(cancelSlot, codigo)} onClose={() => setCancelSlot(null)} />
       )}
-      {watchOpen && <WatchSheet fecha={selected} franjas={franjas} initialSlot={watchSlot} onClose={() => setWatchOpen(false)} />}
+      {watchOpen && <WatchSheet fecha={selected} franjas={franjas} reservations={allRes} vivienda={profile?.vivienda ?? ''} initialSlot={watchSlot} onClose={() => setWatchOpen(false)} />}
     </div>
   );
 }

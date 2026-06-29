@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { loadWatches, addWatch, removeWatch, expandRange, type Watch } from './watchlist';
+import { loadWatches, addWatch, removeWatch, expandRange, pruneExpiredWatches, saveWatches, type Watch } from './watchlist';
 import type { Franja } from './types';
 
 const franjas: Franja[] = [
@@ -32,5 +32,14 @@ describe('watchlist', () => {
     const all = loadWatches();
     expect(all).toHaveLength(1);
     expect(all[0].franjas).toEqual(['P1-8', 'P1-9']);
+  });
+
+  it('pruneExpiredWatches drops past-date watches and keeps future ones (incl. standing/limit-blocked)', () => {
+    saveWatches([
+      { fecha: '20200101', franjas: ['P1-6'], active: true },   // long past → drop
+      { fecha: '20990101', franjas: ['P1-7'], active: true },   // future standing → keep
+    ]);
+    expect(pruneExpiredWatches().map((w) => w.fecha)).toEqual(['20990101']);
+    expect(loadWatches().map((w) => w.fecha)).toEqual(['20990101']);
   });
 });

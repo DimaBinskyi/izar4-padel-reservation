@@ -1,6 +1,13 @@
 {
-  "app": { "title": "Pádel" },
-  "tabs": { "slots": "Turnos", "watch": "Captura", "stats": "Estadísticas", "settings": "Ajustes" },
+  "app": {
+    "title": "Pádel"
+  },
+  "tabs": {
+    "slots": "Turnos",
+    "watch": "Captura",
+    "stats": "Estadísticas",
+    "settings": "Ajustes"
+  },
   "slots": {
     "selectDate": "Selecciona una fecha",
     "loading": "Cargando turnos…",
@@ -11,21 +18,42 @@
     "cached": "En caché",
     "updated": "Actualizado"
   },
-  "status": { "libre": "Libre", "ocupado": "Ocupado", "bloqueado": "Bloqueado", "pasado": "Pasado", "pronto": "Pronto", "mine": "Mía" },
-  "common": { "save": "Guardar", "cancel": "Cancelar", "back": "Volver", "confirm": "Confirmar", "edit": "Editar", "loading": "Cargando…" },
+  "status": {
+    "libre": "Libre",
+    "ocupado": "Ocupado",
+    "bloqueado": "Bloqueado",
+    "pasado": "Pasado",
+    "pronto": "Pronto",
+    "mine": "Mía"
+  },
+  "common": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "back": "Volver",
+    "confirm": "Confirmar",
+    "edit": "Editar",
+    "loading": "Cargando…"
+  },
   "profile": {
     "fillTitle": "Completa tu perfil",
     "fillSubtitle": "Una vez — y reservar es un toque. Solo te lo pediremos otra vez si se pierden los datos.",
     "editTitle": "Editar perfil",
-    "name": "Nombre", "apartment": "Vivienda", "cancelCode": "Código de cancelación",
-    "apartmentSearch": "Buscar… ej. P3-7", "codeHint": "🔑 Lo necesitarás para cancelar.",
-    "namePlaceholder": "Tu nombre", "codePlaceholder": "ej. sol24",
+    "name": "Nombre",
+    "apartment": "Vivienda",
+    "cancelCode": "Código de cancelación",
+    "apartmentSearch": "Buscar… ej. P3-7",
+    "codeHint": "🔑 Lo necesitarás para cancelar.",
+    "namePlaceholder": "Tu nombre",
+    "codePlaceholder": "ej. sol24",
     "pickFromList": "Elige una vivienda de la lista."
   },
   "booking": {
     "title": "Confirmar reserva",
-    "resource": "Recurso", "date": "Fecha", "slot": "Turno",
-    "bookingAs": "Reservo como", "afterWeekly": "Tras reservar quedan {{n}}/{{limit}} en la semana del {{week}}",
+    "resource": "Recurso",
+    "date": "Fecha",
+    "slot": "Turno",
+    "bookingAs": "Reservo como",
+    "afterWeekly": "Tras reservar quedan {{n}}/{{limit}} en la semana del {{week}}",
     "limitReachedWeek": "Límite de {{limit}} reservas por semana alcanzado.",
     "limitReachedDay": "Ya tienes una reserva ese día (1 por día).",
     "error": "Error al reservar. Inténtalo de nuevo."
@@ -33,29 +61,99 @@
   "cancel": {
     "title": "¿Cancelar reserva?",
     "warn": "El turno vuelve a quedar libre. No se puede deshacer.",
-    "yours": "Tu reserva", "codeRemembered": "🔑 Cancelaremos con el código que usaste ✓",
-    "enterCode": "Código de cancelación", "askCode": "El código de esta reserva no está guardado — introduce el código que usaste:",
+    "yours": "Tu reserva",
+    "codeRemembered": "🔑 Cancelaremos con el código que usaste ✓",
+    "enterCode": "Código de cancelación",
+    "askCode": "El código de esta reserva no está guardado — introduce el código que usaste:",
     "wrongCode": "Código incorrecto. Inténtalo de nuevo.",
-    "doCancel": "Cancelar reserva", "error": "Error al cancelar. Inténtalo de nuevo."
+    "doCancel": "Cancelar reserva",
+    "error": "Error al cancelar. Inténtalo de nuevo."
   },
-  "nav": { "slots": "Turnos", "mybookings": "Mis reservas", "stats": "Estadísticas", "settings": "Ajustes" },
-  "mybookings": { "title": "Mis reservas", "empty": "No hay reservas próximas.", "subtitle": "Próximas · por Vivienda + nombre",
-    "originApp": "📱 en la app", "originAuto": "🎯 captura automática", "originIzar4": "🌐 en la web izar4", "cancel": "Cancelar" },
-  "stats": { "title": "Estadísticas", "week": "Semana", "month": "Mes", "all": "Todo", "custom": "Periodo",
-    "bookings": "reservas", "played": "jugadas", "cancelled": "canceladas", "upcoming": "próximas",
-    "favourite": "Turno favorito", "autoGrabbed": "Capturadas auto", "hours": "Horas en pista", "hUnit": "h", "history": "Historial", "none": "—" },
-  "settings": { "title": "Ajustes", "profile": "Perfil", "language": "Idioma de la interfaz",
-    "limits": "Límites", "limitsValue": "3 por semana · 1 por día", "version": "Versión", "install": "Instalar app", "editProfile": "Editar perfil" },
-  "install": { "banner": "Instala la app para notificaciones y acceso rápido", "ios": "Pulsa Compartir → Añadir a pantalla de inicio", "cta": "Instalar", "later": "Más tarde" },
+  "nav": {
+    "slots": "Turnos",
+    "mybookings": "Mis reservas",
+    "stats": "Estadísticas",
+    "settings": "Ajustes"
+  },
+  "mybookings": {
+    "title": "Mis reservas",
+    "empty": "No hay reservas próximas.",
+    "subtitle": "Próximas · por Vivienda + nombre",
+    "originApp": "📱 en la app",
+    "originAuto": "🎯 captura automática",
+    "originIzar4": "🌐 en la web izar4",
+    "cancel": "Cancelar"
+  },
+  "stats": {
+    "title": "Estadísticas",
+    "week": "Semana",
+    "month": "Mes",
+    "all": "Todo",
+    "custom": "Periodo",
+    "bookings": "reservas",
+    "played": "jugadas",
+    "cancelled": "canceladas",
+    "upcoming": "próximas",
+    "favourite": "Turno favorito",
+    "autoGrabbed": "Capturadas auto",
+    "hours": "Horas en pista",
+    "hUnit": "h",
+    "history": "Historial",
+    "none": "—"
+  },
+  "settings": {
+    "title": "Ajustes",
+    "profile": "Perfil",
+    "language": "Idioma de la interfaz",
+    "limits": "Límites",
+    "limitsValue": "3 por semana · 1 por día",
+    "version": "Versión",
+    "install": "Instalar app",
+    "editProfile": "Editar perfil"
+  },
+  "install": {
+    "banner": "Instala la app para notificaciones y acceso rápido",
+    "ios": "Pulsa Compartir → Añadir a pantalla de inicio",
+    "cta": "Instalar",
+    "later": "Más tarde"
+  },
   "notif": {
-    "section": "Notificaciones", "master": "Todas las notificaciones", "freed": "🆓 Turno libre",
-    "grabbed": "🎯 Capturado para ti", "limitOff": "⛔ Captura automática desactivada",
-    "watchExpired": "⌛ Captura expirada", "myCancelled": "❌ Cancelaron mi reserva",
-    "suppressSelf": "No avisar de mis acciones", "quiet": "Horas de silencio", "quietWindow": "Ventana",
+    "section": "Notificaciones",
+    "master": "Todas las notificaciones",
+    "freed": "🆓 Turno libre",
+    "grabbed": "🎯 Capturado para ti",
+    "limitOff": "⛔ Captura automática desactivada",
+    "watchExpired": "⌛ Captura expirada",
+    "myCancelled": "❌ Cancelaron mi reserva",
+    "suppressSelf": "No avisar de mis acciones",
+    "quiet": "Horas de silencio",
+    "quietWindow": "Ventana",
     "nightAllowed": "Permitido de noche",
-    "installTitle": "Añade a pantalla de inicio", "installBody": "En iPhone las notificaciones solo funcionan en la app instalada.",
-    "enableTitle": "Activar notificaciones", "enableBody": "Para capturar pistas libres y ver capturas automáticas.",
-    "enableCta": "Activar", "deniedTitle": "Notificaciones desactivadas", "deniedBody": "Actívalas en Ajustes del teléfono → app → Notificaciones.",
-    "recheck": "Comprobar de nuevo", "onTitle": "Notificaciones activas ✓", "unsupportedTitle": "Este dispositivo no admite web push" },
-  "watch": { "title": "Captura", "newTitle": "Nueva captura", "from": "Desde", "to": "Hasta", "preview": "Capturaré {{n}} turnos:", "add": "Añadir captura", "active": "Capturas activas", "none": "Sin capturas activas", "remove": "Quitar", "watchSlot": "Capturar" }
+    "installTitle": "Añade a pantalla de inicio",
+    "installBody": "En iPhone las notificaciones solo funcionan en la app instalada.",
+    "enableTitle": "Activar notificaciones",
+    "enableBody": "Para capturar pistas libres y ver capturas automáticas.",
+    "enableCta": "Activar",
+    "deniedTitle": "Notificaciones desactivadas",
+    "deniedBody": "Actívalas en Ajustes del teléfono → app → Notificaciones.",
+    "recheck": "Comprobar de nuevo",
+    "onTitle": "Notificaciones activas ✓",
+    "unsupportedTitle": "Este dispositivo no admite web push"
+  },
+  "watch": {
+    "title": "Captura",
+    "newTitle": "Nueva captura",
+    "from": "Desde",
+    "to": "Hasta",
+    "preview": "Capturaré {{n}} turnos:",
+    "add": "Añadir captura",
+    "active": "Capturas activas",
+    "none": "Sin capturas activas",
+    "remove": "Quitar",
+    "watchSlot": "Capturar",
+    "toastAdded": "Vigilando {{n}} turno(s)",
+    "toastAlready": "Ya vigilas estos turnos",
+    "toastMerged": "Fusionado — ahora {{n}} turno(s)",
+    "limitWaiting": "esperando el límite semanal"
+  }
 }

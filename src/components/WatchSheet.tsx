@@ -1,27 +1,48 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Franja } from '../lib/types';
+import type { Franja, Reservation } from '../lib/types';
 import { expandRange, loadWatches, addWatch, removeWatch, pruneExpiredWatches, type Watch } from '../lib/watchlist';
 import { syncRegistration } from '../lib/pushClient';
 import { ymdToDisplay } from '../lib/dates';
+import { countWeek } from '../lib/limits';
+import { WEEKLY_LIMIT } from '../config';
 
-export function WatchSheet({ fecha, franjas, initialSlot = null, onClose }: { fecha: string; franjas: Franja[]; initialSlot?: string | null; onClose: () => void }) {
+export function WatchSheet({ fecha, franjas, reservations, vivienda, initialSlot = null, onClose }: {
+  fecha: string; franjas: Franja[]; reservations: Reservation[]; vivienda: string; initialSlot?: string | null; onClose: () => void;
+}) {
   const { t } = useTranslation();
   const ordered = useMemo(() => [...franjas].sort((a, b) => a.order - b.order), [franjas]);
   // Pre-select the tapped slot's time when opened from a slot's 🎯 button (else the full day range).
   const [from, setFrom] = useState(initialSlot ?? ordered[0]?.slot ?? '');
   const [to, setTo] = useState(initialSlot ?? ordered[ordered.length - 1]?.slot ?? '');
   const [watches, setWatches] = useState<Watch[]>(pruneExpiredWatches());   // drop date-passed watches on open
-  const [info, setInfo] = useState<Watch | null>(null);   // read-only details of a tapped active watch
+  const [info, setInfo] = useState<Watch | null>(null);                     // read-only details of a tapped watch
+  const [toast, setToast] = useState<string | null>(null);
   const preview = expandRange(ordered, from, to);
 
+  function showToast(msg: string) { setToast(msg); window.setTimeout(() => setToast((cur) => (cur === msg ? null : cur)), 3200); }
+
+  // Watches are one-per-date covering a set of slots. Adding merges into that set (union):
+  // a subset is already covered (no-op), anything new merges the smaller into the bigger.
   function save() {
-    addWatch({ fecha, franjas: preview, active: true });
-    setWatches(loadWatches());
-    void syncRegistration();
+    if (preview.length === 0) return;
+    const existing = watches.find((w) => w.fecha === fecha);
+    if (existing) {
+      const oldSet = new Set(existing.franjas);
+      const union = ordered.map((f) => f.slot).filter((s) => oldSet.has(s) || preview.includes(s));
+      if (union.length === oldSet.size) { showToast(t('watch.toastAlready')); return; }   // new ⊆ existing → nothing to do
+      addWatch({ fecha, franjas: union, active: true });   // addWatch replaces same-date → the merged union
+      setWatches(loadWatches()); void syncRegistration();
+      showToast(t('watch.toastMerged', { n: union.length }));
+    } else {
+      addWatch({ fecha, franjas: preview, active: true });
+      setWatches(loadWatches()); void syncRegistration();
+      showToast(t('watch.toastAdded', { n: preview.length }));
+    }
   }
   function drop(f: string) { removeWatch(f); setWatches(loadWatches()); setInfo(null); void syncRegistration(); }
   const slotTimes = (slots: string[]) => slots.map((s) => { const f = ordered.find((x) => x.slot === s); return f ? `${f.start}–${f.end}` : s; });
+  const limitBlocked = (w: Watch) => countWeek(reservations, vivienda, w.fecha) >= WEEKLY_LIMIT;
 
   const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(2,6,12,.66)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 50 };
   const sheet: React.CSSProperties = { width: '100%', maxWidth: 420, background: '#101826', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: '14px 16px 18px' };
@@ -52,7 +73,10 @@ export function WatchSheet({ fecha, franjas, initialSlot = null, onClose }: { fe
         {watches.length === 0 && <div style={{ fontSize: 12, color: '#8aa0bd' }}>{t('watch.none')}</div>}
         {watches.map((w) => (
           <div key={w.fecha} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid #141d2a' }}>
-            <div style={{ flex: 1, fontSize: 12.5, cursor: 'pointer' }} onClick={() => setInfo(w)}>{ymdToDisplay(w.fecha)} · {w.franjas.length} · {w.active ? '🟢' : '⚪'}</div>
+            <div style={{ flex: 1, fontSize: 12.5, cursor: 'pointer' }} onClick={() => setInfo(w)}>
+              {ymdToDisplay(w.fecha)} · {w.franjas.length} · {w.active ? '🟢' : '⚪'}
+              {limitBlocked(w) && <span style={{ marginLeft: 6, fontSize: 10.5, padding: '2px 7px', borderRadius: 20, background: '#241a00', color: '#f2c14e' }}>⏳ {t('watch.limitWaiting')}</span>}
+            </div>
             <button onClick={() => drop(w.fecha)} style={{ border: 'none', background: '#16202e', color: '#8aa0bd', borderRadius: 8, padding: '6px 10px', fontSize: 12 }}>🗑</button>
           </div>
         ))}
@@ -62,11 +86,18 @@ export function WatchSheet({ fecha, franjas, initialSlot = null, onClose }: { fe
         <div style={{ ...overlay, zIndex: 60 }} onClick={(e) => { e.stopPropagation(); setInfo(null); }}>
           <div style={sheet} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 12px' }}>{t('watch.title')} · {ymdToDisplay(info.fecha)} {info.active ? '🟢' : '⚪'}</h3>
+            {limitBlocked(info) && <div style={{ fontSize: 12, color: '#f2c14e', marginBottom: 10 }}>⏳ {t('watch.limitWaiting')}</div>}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
               {slotTimes(info.franjas).map((tm, i) => <span key={i} style={chip}>{tm}</span>)}
             </div>
             <button onClick={() => setInfo(null)} style={{ width: '100%', padding: '11px 0', borderRadius: 11, border: 'none', background: '#16202e', color: '#cfe0f5', fontWeight: 700 }}>{t('common.back')}</button>
           </div>
+        </div>
+      )}
+
+      {toast && (
+        <div style={{ position: 'fixed', left: 0, right: 0, top: 'calc(env(safe-area-inset-top) + 12px)', display: 'flex', justifyContent: 'center', zIndex: 70, pointerEvents: 'none' }}>
+          <div style={{ maxWidth: 360, margin: '0 14px', background: '#0e2018', border: '1px solid #234e34', color: '#a7e8c1', borderRadius: 12, padding: '10px 14px', fontSize: 12.5, boxShadow: '0 6px 20px rgba(0,0,0,.4)' }}>{toast}</div>
         </div>
       )}
     </div>
