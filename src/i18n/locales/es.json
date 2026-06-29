@@ -156,6 +156,7 @@
     "toastMerged": "Fusionado — ahora {{n}} turno(s)",
     "limitWaiting": "esperando el límite semanal",
     "toastFreeSome": "Hay turnos libres en este rango — resérvalos. Vigilo solo los ocupados ({{n}}).",
-    "toastFreeAll": "Todos los turnos seleccionados están libres — resérvalos."
+    "toastFreeAll": "Todos los turnos seleccionados están libres — resérvalos.",
+    "toastHasFree": "Tu selección incluye turnos libres — elige solo los ocupados (los libres se reservan ya)."
   }
 }

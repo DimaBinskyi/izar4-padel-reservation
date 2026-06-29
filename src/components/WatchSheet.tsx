@@ -22,19 +22,17 @@ export function WatchSheet({ fecha, franjas, reservations, vivienda, initialSlot
 
   function showToast(msg: string, warn = false) { setToast({ msg, warn }); window.setTimeout(() => setToast((c) => (c?.msg === msg ? null : c)), 3800); }
 
-  // A watch only makes sense for OCCUPIED slots — a free slot is just bookable now, so drop the free
-  // ones (and warn). Then merge into a contiguous same-date watch; disjoint ranges stay separate.
+  // A watch only makes sense for OCCUPIED slots — a free slot is just bookable now. If the selected
+  // range contains ANY free slot, refuse and warn: the user must pick a range of only busy slots.
   function save() {
     if (preview.length === 0) return;
     const occupied = new Set(reservations.filter((r) => r.fecha === fecha).map((r) => r.slot));
-    const watchSlots = preview.filter((s) => occupied.has(s));
-    if (watchSlots.length === 0) { showToast(t('watch.toastFreeAll'), true); return; }   // all free → book them, nothing to watch
-    const { status, count } = addOrMergeWatch(fecha, watchSlots, ordered.map((f) => f.slot));
+    if (preview.some((s) => !occupied.has(s))) { showToast(t('watch.toastHasFree'), true); return; }   // any free → don't create
+    const { status, count } = addOrMergeWatch(fecha, preview, ordered.map((f) => f.slot));
     setWatches(loadWatches());
     if (status === 'already') { showToast(t('watch.toastAlready'), true); return; }
     void syncRegistration();
-    if (watchSlots.length < preview.length) showToast(t('watch.toastFreeSome', { n: count }), true);   // some free slots were skipped
-    else showToast(status === 'merged' ? t('watch.toastMerged', { n: count }) : t('watch.toastAdded', { n: count }));
+    showToast(status === 'merged' ? t('watch.toastMerged', { n: count }) : t('watch.toastAdded', { n: count }));
   }
   function drop(id?: string) { if (id) removeWatchById(id); setWatches(loadWatches()); setInfo(null); void syncRegistration(); }
   const slotTimes = (slots: string[]) => slots.map((s) => { const f = ordered.find((x) => x.slot === s); return f ? `${f.start}–${f.end}` : s; });
