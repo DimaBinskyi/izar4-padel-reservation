@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Franja, Reservation } from '../lib/types';
-import { expandRange, loadWatches, addWatch, removeWatch, pruneExpiredWatches, type Watch } from '../lib/watchlist';
+import { expandRange, loadWatches, addOrMergeWatch, removeWatchById, pruneExpiredWatches, type Watch } from '../lib/watchlist';
 import { syncRegistration } from '../lib/pushClient';
 import { ymdToDisplay } from '../lib/dates';
 import { countWeek } from '../lib/limits';
@@ -24,24 +24,17 @@ export function WatchSheet({ fecha, franjas, reservations, vivienda, initialSlot
 
   // Watches are one-per-date covering a set of slots. Adding merges into that set (union):
   // a subset is already covered (no-op), anything new merges the smaller into the bigger.
+  // Merges into a contiguous same-date watch; disjoint ranges (morning vs evening) stay separate.
   function save() {
     if (preview.length === 0) return;
-    const existing = watches.find((w) => w.fecha === fecha);
-    if (existing) {
-      const oldSet = new Set(existing.franjas);
-      const union = ordered.map((f) => f.slot).filter((s) => oldSet.has(s) || preview.includes(s));
-      if (union.length === oldSet.size) { showToast(t('watch.toastAlready')); return; }   // new ⊆ existing → nothing to do
-      addWatch({ fecha, franjas: union, active: true });   // addWatch replaces same-date → the merged union
-      setWatches(loadWatches()); void syncRegistration();
-      showToast(t('watch.toastMerged', { n: union.length }));
-    } else {
-      addWatch({ fecha, franjas: preview, active: true });
-      setWatches(loadWatches()); void syncRegistration();
-      showToast(t('watch.toastAdded', { n: preview.length }));
-    }
+    const { status, count } = addOrMergeWatch(fecha, preview, ordered.map((f) => f.slot));
+    setWatches(loadWatches());
+    if (status !== 'already') void syncRegistration();
+    showToast(status === 'already' ? t('watch.toastAlready') : status === 'merged' ? t('watch.toastMerged', { n: count }) : t('watch.toastAdded', { n: count }));
   }
-  function drop(f: string) { removeWatch(f); setWatches(loadWatches()); setInfo(null); void syncRegistration(); }
+  function drop(id?: string) { if (id) removeWatchById(id); setWatches(loadWatches()); setInfo(null); void syncRegistration(); }
   const slotTimes = (slots: string[]) => slots.map((s) => { const f = ordered.find((x) => x.slot === s); return f ? `${f.start}–${f.end}` : s; });
+  const watchSpan = (w: Watch) => { const fs = ordered.filter((f) => w.franjas.includes(f.slot)); return fs.length ? `${fs[0].start}–${fs[fs.length - 1].end}` : String(w.franjas.length); };
   const limitBlocked = (w: Watch) => countWeek(reservations, vivienda, w.fecha) >= WEEKLY_LIMIT;
 
   const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(2,6,12,.66)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 50 };
@@ -72,12 +65,12 @@ export function WatchSheet({ fecha, franjas, reservations, vivienda, initialSlot
         <div style={{ fontSize: 11, textTransform: 'uppercase', color: '#7e92ad', marginBottom: 8 }}>{t('watch.active')}</div>
         {watches.length === 0 && <div style={{ fontSize: 12, color: '#8aa0bd' }}>{t('watch.none')}</div>}
         {watches.map((w) => (
-          <div key={w.fecha} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid #141d2a' }}>
+          <div key={w.id ?? w.fecha} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid #141d2a' }}>
             <div style={{ flex: 1, fontSize: 12.5, cursor: 'pointer' }} onClick={() => setInfo(w)}>
-              {ymdToDisplay(w.fecha)} · {w.franjas.length} · {w.active ? '🟢' : '⚪'}
+              {ymdToDisplay(w.fecha)} · {watchSpan(w)} {w.active ? '🟢' : '⚪'}
               {limitBlocked(w) && <span style={{ marginLeft: 6, fontSize: 10.5, padding: '2px 7px', borderRadius: 20, background: '#241a00', color: '#f2c14e' }}>⏳ {t('watch.limitWaiting')}</span>}
             </div>
-            <button onClick={() => drop(w.fecha)} style={{ border: 'none', background: '#16202e', color: '#8aa0bd', borderRadius: 8, padding: '6px 10px', fontSize: 12 }}>🗑</button>
+            <button onClick={() => drop(w.id)} style={{ border: 'none', background: '#16202e', color: '#8aa0bd', borderRadius: 8, padding: '6px 10px', fontSize: 12 }}>🗑</button>
           </div>
         ))}
       </div>

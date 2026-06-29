@@ -1,7 +1,7 @@
 import { getDeviceSecret, getDeviceId } from './deviceSecret';
 import { WORKER_BASE } from '../config';
 import { recordBooking, bookingKey } from './bookingsDb';
-import { removeWatch } from './watchlist';
+import { removeWatchBySlot } from './watchlist';
 
 export async function pullGrabbed(): Promise<number> {
   const r = await fetch(`${WORKER_BASE}/api/pull-grabbed?device=${encodeURIComponent(getDeviceId())}`, {
@@ -14,7 +14,7 @@ export async function pullGrabbed(): Promise<number> {
       start: g.start, end: '', nombre: '', vivienda: '', codigoUsed: g.codigo, origin: 'auto',
       status: 'active', createdAt: Date.now(),
     });
-    removeWatch(g.fecha);   // the watch did its job (auto-grabbed) → clear it locally so it stops showing as active
+    removeWatchBySlot(g.fecha, g.slot);   // the watch covering this grabbed slot did its job → clear it locally
   }
   return d.grabbed.length;
 }
