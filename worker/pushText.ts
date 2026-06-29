@@ -1,4 +1,4 @@
-export interface PushParams { time?: string; fecha?: string }
+export interface PushParams { time?: string; fecha?: string; slot?: string }
 type Builder = (p: PushParams) => { title: string; body: string };
 
 // YYYYMMDD → DD.MM.YYYY (human-readable in notifications). Leaves anything else untouched.

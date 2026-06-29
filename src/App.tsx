@@ -24,6 +24,25 @@ export default function App() {
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') onForeground(); });
   }, []);
 
+  // Deep link from a tapped push notification → open the Slots tab on that date and blink the slot.
+  useEffect(() => {
+    // Cold start: the SW opened `/?fecha=YYYYMMDD&slot=P1-6`. Consume it, then clean the URL.
+    const q = new URLSearchParams(window.location.search);
+    const fecha = q.get('fecha'); const slot = q.get('slot');
+    if (fecha && slot) {
+      setSlotFocus({ fecha, slot }); setTab('slots');
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+    // Already open: the SW posts the target (a window focus() alone wouldn't move the SPA).
+    const onMsg = (e: MessageEvent) => {
+      if (e.data?.type === 'padel-focus-slot' && e.data.fecha && e.data.slot) {
+        setSlotFocus({ fecha: e.data.fecha, slot: e.data.slot }); setTab('slots');
+      }
+    };
+    navigator.serviceWorker?.addEventListener('message', onMsg);
+    return () => navigator.serviceWorker?.removeEventListener('message', onMsg);
+  }, []);
+
   // The Slots tab owns the mandatory first-run profile modal (it blocks the screen until filled).
   // Re-read the profile from storage on every tab switch so other tabs see the saved profile.
   function go(x: Tab) { setProfile(loadProfile()); setTab(x); }

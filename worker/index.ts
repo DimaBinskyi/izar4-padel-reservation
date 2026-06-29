@@ -303,7 +303,7 @@ async function runPoll(env: Env, now: Date): Promise<void> {
       if (ok.ok) {
         watch.active = false; changed = true;
         grabbedOut.push({ fecha: watch.fecha, slot, id: ok.id, codigo: rec.profile.codigo, start: franjas[slot]?.start ?? '' });
-        await maybePush(rec, 'grabbed', { time: franjas[slot]?.start ?? '', fecha: watch.fecha }, vapid, now);
+        await maybePush(rec, 'grabbed', { time: franjas[slot]?.start ?? '', fecha: watch.fecha, slot }, vapid, now);
       }
     }
 
@@ -317,7 +317,7 @@ async function runPoll(env: Env, now: Date): Promise<void> {
         if (o && o.vivienda.trim().toUpperCase() === myV && o.nombre.trim().toLowerCase() === myN) continue;
         const [fecha, slot] = key.split('|');
         if (grabbedOut.some((g) => g.fecha === fecha && g.slot === slot)) continue;
-        await maybePush(rec, 'freed', { time: franjas[slot]?.start ?? '', fecha }, vapid, now);
+        await maybePush(rec, 'freed', { time: franjas[slot]?.start ?? '', fecha, slot }, vapid, now);
       }
     }
 
@@ -333,7 +333,7 @@ async function runPoll(env: Env, now: Date): Promise<void> {
         if (slotStartPassed(fecha, slot, franjas, now)) continue;            // only future
         if (rec.prefs.suppressSelf && (rec.recentActions ?? []).includes(key)) continue;
         if (grabbedOut.some((g) => g.fecha === fecha && g.slot === slot)) continue;
-        await maybePush(rec, 'myCancelled', { time: franjas[slot]?.start ?? '', fecha }, vapid, now);
+        await maybePush(rec, 'myCancelled', { time: franjas[slot]?.start ?? '', fecha, slot }, vapid, now);
       }
     }
 
@@ -356,7 +356,10 @@ async function maybePush(rec: DeviceRecord, type: string, params: PushParams, va
     if (inQuiet && !rec.prefs.quiet.nightAllowed?.[type]) return;
   }
   const text = buildPushText(rec.locale ?? 'uk', type, params);
-  try { await sendPush(rec.subscription, { title: text.title, body: text.body, url: '/' }, vapid); }
+  // Slot-specific pushes (freed/grabbed/myCancelled) carry the target so tapping the notification deep-links
+  // to that date and blinks the slot (same highlight as tapping a row in "My bookings"). watchExpired has no slot.
+  const focus = params.fecha && params.slot ? { fecha: params.fecha, slot: params.slot } : undefined;
+  try { await sendPush(rec.subscription, { title: text.title, body: text.body, url: '/', focus }, vapid); }
   catch { /* a stale/expired subscription must not break the rest of the device loop */ }
 }
 
