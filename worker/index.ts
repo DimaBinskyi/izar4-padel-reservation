@@ -294,8 +294,9 @@ async function runPoll(env: Env, now: Date): Promise<void> {
       const dayCount = reservas.filter((r) => r.vivienda.trim().toUpperCase() === rec.profile.vivienda.trim().toUpperCase() && r.fecha === watch.fecha).length;
       const slot = chooseGrab(watch, freed, { franjas, now, weekCount, dayCount, weeklyLimit: 3, dailyLimit: 1 });
       if (!slot) {
-        if (weekCount >= 3) { watch.active = false; changed = true;
-          await maybePush(rec, 'limitOff', {}, vapid, now); }
+        // Nothing grabbable this cycle (nothing freed, or at the weekly/daily limit). Keep the watch
+        // ACTIVE — it's a standing intent for a fixed date: if you free room by cancelling before that
+        // date, it grabs next cycle (no manual re-arming). It self-clears only on grab or date expiry.
         continue;
       }
       const ok = await createReservation(rec.profile, watch.fecha, slot);
