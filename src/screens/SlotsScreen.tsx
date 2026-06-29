@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DateStrip } from '../components/DateStrip';
 import { SlotRow } from '../components/SlotRow';
@@ -35,13 +35,17 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
   const today = dateToYmd(new Date());
   const [selected, setSelected] = useState(today);
 
-  // All data is fetched up front (reservations for every date come from the cron snapshot); the
-  // selected day's slots are derived from it. We re-fetch silently on each day change / write.
+  // The selected day is (re)fetched LIVE from izar4 on every landing (open / day change / return),
+  // so the day you're viewing is always current. Slots are derived from `allRes`; the weekly limit
+  // is counted from the same fetch (izar4 returns all reservations in one request, so a single live
+  // call covers both the day's slots and the week's count).
   const [allRes, setAllRes] = useState<Reservation[]>([]);
   const [franjas, setFranjas] = useState<Franja[]>([]);
   const [weekdayBlocks, setWeekdayBlocks] = useState<WeekdayBlockSet>({});
   const [dayBlocks, setDayBlocks] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  const [loadingDay, setLoadingDay] = useState(false);   // a day's live fetch is in flight → show spinner
+  const loadSeq = useRef(0);                              // drop out-of-order responses from rapid day taps
   const ready = franjas.length > 0;   // first load finished → real data to show
 
   const [profile, setProfile] = useState<Profile | null>(loadProfile());
@@ -54,26 +58,33 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
   const secret = getDeviceSecret();
   const needProfile = !isProfileComplete(profile);
 
-  const load = useCallback(async (live = false) => {
+  // `live` → fetch fresh from izar4 (the default for landing on a day); `spinner` → show the per-day
+  // loading spinner while in flight. A sequence guard drops responses superseded by a newer load
+  // (e.g. tapping through days quickly), so the list never shows a stale day.
+  const load = useCallback(async (live = false, spinner = false) => {
+    const seq = ++loadSeq.current;
+    if (spinner) setLoadingDay(true);
     setError(null);
     try {
       const f = await fetchFranjas(secret);          // session-cached
       const wb = await fetchWeekdayBlocks(secret);    // session-cached
       const all = applyOverrides(await fetchAllReservations(secret, live));
       const db = await fetchDayBlocks(secret);        // worker-cached
+      if (seq !== loadSeq.current) return;            // a newer load started → drop this stale result
       setFranjas(f); setWeekdayBlocks(wb); setAllRes(all); setDayBlocks(db);
-    } catch { setError(t('slots.error')); }
+    } catch {
+      if (seq === loadSeq.current) setError(t('slots.error'));
+    } finally {
+      if (seq === loadSeq.current) setLoadingDay(false);
+    }
   }, [secret, t]);
 
-  useEffect(() => { void load(); }, [load]);   // instant: render from the snapshot
+  useEffect(() => { void load(true, true); }, [load]);   // open → live fetch of today, with spinner
 
-  // Refresh from the snapshot when the app/tab regains focus. The snapshot is kept current by the
-  // cron AND by the Worker patching it on every app booking/cancel, so this stays consistent with
-  // the user's own actions. (We deliberately do NOT auto-fetch live izar4 here: its read-after-write
-  // lag can momentarily drop a just-made booking, which mis-counted the weekly limit. Pull-to-refresh
-  // is the explicit "fetch live now" action.)
+  // Re-fetch the current day live when the app/tab regains focus (background, no spinner) so it stays
+  // fresh after switching away to the website. Explicit refresh-now is pull-to-refresh.
   useEffect(() => {
-    const reconcile = () => { if (document.visibilityState === 'visible') void load(false); };
+    const reconcile = () => { if (document.visibilityState === 'visible') void load(true, false); };
     document.addEventListener('visibilitychange', reconcile);
     window.addEventListener('focus', reconcile);
     return () => {
@@ -82,11 +93,9 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     };
   }, [load]);
 
-  // Jump to a slot (from My bookings): switch date, refresh, then blink it for 3s.
-  // Snapshot read (not live) — all dates are already in `allRes`, and overrides keep recent
-  // actions correct; a live refetch here is slow and can poison the snapshot on a WAF 503.
+  // Jump to a slot (from My bookings): switch date, live-fetch it (with spinner), then blink it for 3s.
   useEffect(() => {
-    if (focus) { setSelected(focus.fecha); setHighlightSlot(focus.slot); void load(); onFocusConsumed?.(); }
+    if (focus) { setSelected(focus.fecha); setHighlightSlot(focus.slot); void load(true, true); onFocusConsumed?.(); }
   }, [focus, onFocusConsumed, load]);
   useEffect(() => {
     if (!highlightSlot) return;
@@ -100,10 +109,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
   function goToDate(d: string) {
     setSelected(d);
     setHighlightSlot(null);
-    // Snapshot refresh only. The snapshot already holds every date, so the new day renders
-    // instantly from `allRes`; forcing a live izar4 fetch here is slow and risks overwriting
-    // the snapshot with an empty result when izar4's WAF 503s (slots would then show empty).
-    void load();
+    void load(true, true);   // live fetch of the day being opened (incl. returning to it), with spinner
   }
 
   async function doBook(slot: SlotView) {
@@ -171,13 +177,13 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
 
       <div style={{ padding: '2px 10px 8px', minHeight: '60vh' }}>
         {error && <div style={{ padding: 16, color: '#ff9b9b' }}>{error}</div>}
-        {!error && !ready && (
+        {!error && (loadingDay || !ready) && (
           <div style={{ display: 'flex', justifyContent: 'center', padding: '32px 0', color: '#8aa0bd' }}><Spinner /></div>
         )}
-        {!error && ready && dayBlocks[selected] !== undefined && (
+        {!error && !loadingDay && ready && dayBlocks[selected] !== undefined && (
           <div style={{ padding: 16, color: '#f2c14e' }}>{dayBlocks[selected] || t('slots.dayBlocked')}</div>
         )}
-        {!error && ready && dayBlocks[selected] === undefined && slots.map((s) => (
+        {!error && !loadingDay && ready && dayBlocks[selected] === undefined && slots.map((s) => (
           <SlotRow key={s.franja.slot} slot={s}
             mine={!!(s.reservation && profile && isMine(s.reservation, profile))}
             canBook={!beyondHorizon}
