@@ -65,12 +65,12 @@ export function WatchSheet({ fecha, franjas, reservations, vivienda, initialSlot
         <div style={{ fontSize: 11, textTransform: 'uppercase', color: '#7e92ad', marginBottom: 8 }}>{t('watch.active')}</div>
         {watches.length === 0 && <div style={{ fontSize: 12, color: '#8aa0bd' }}>{t('watch.none')}</div>}
         {watches.map((w) => (
-          <div key={w.id ?? w.fecha} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid #141d2a' }}>
-            <div style={{ flex: 1, fontSize: 12.5, cursor: 'pointer' }} onClick={() => setInfo(w)}>
+          <div key={w.id ?? w.fecha} onClick={() => setInfo(w)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid #141d2a', cursor: 'pointer' }}>
+            <div style={{ flex: 1, fontSize: 12.5 }}>
               {ymdToDisplay(w.fecha)} · {watchSpan(w)} {w.active ? '🟢' : '⚪'}
               {limitBlocked(w) && <span style={{ marginLeft: 6, fontSize: 10.5, padding: '2px 7px', borderRadius: 20, background: '#241a00', color: '#f2c14e' }}>⏳ {t('watch.limitWaiting')}</span>}
             </div>
-            <button onClick={() => drop(w.id)} style={{ border: 'none', background: '#16202e', color: '#8aa0bd', borderRadius: 8, padding: '6px 10px', fontSize: 12 }}>🗑</button>
+            <span style={{ color: '#5a6b82', fontSize: 15 }}>›</span>
           </div>
         ))}
       </div>
@@ -83,7 +83,10 @@ export function WatchSheet({ fecha, franjas, reservations, vivienda, initialSlot
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
               {slotTimes(info.franjas).map((tm, i) => <span key={i} style={chip}>{tm}</span>)}
             </div>
-            <button onClick={() => setInfo(null)} style={{ width: '100%', padding: '11px 0', borderRadius: 11, border: 'none', background: '#16202e', color: '#cfe0f5', fontWeight: 700 }}>{t('common.back')}</button>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setInfo(null)} style={{ flex: 1, padding: '11px 0', borderRadius: 11, border: 'none', background: '#16202e', color: '#cfe0f5', fontWeight: 700 }}>{t('common.back')}</button>
+              <button onClick={() => drop(info.id)} style={{ flex: 1, padding: '11px 0', borderRadius: 11, border: 'none', background: '#3a1620', color: '#ff8a8a', fontWeight: 700 }}>🗑 {t('watch.remove')}</button>
+            </div>
           </div>
         </div>
       )}
