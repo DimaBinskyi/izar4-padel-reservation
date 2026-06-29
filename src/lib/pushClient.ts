@@ -1,5 +1,5 @@
 import { urlBase64ToUint8Array } from './push';
-import { getDeviceSecret } from './deviceSecret';
+import { getDeviceSecret, getDeviceId } from './deviceSecret';
 import { WORKER_BASE } from '../config';
 import { loadProfile } from './profile';
 import { loadWatches } from './watchlist';
@@ -7,7 +7,7 @@ import { loadPrefs } from './notifPrefs';
 import { recentActionKeys } from './recentActions';
 import i18n from '../i18n';
 
-function deviceId(): string { return getDeviceSecret(); }
+function deviceId(): string { return getDeviceId(); }   // per-install record key (NOT the shared auth secret)
 
 async function getVapidPublic(): Promise<string> {
   const r = await fetch(`${WORKER_BASE}/api/vapid`, { headers: { 'x-device-secret': getDeviceSecret() } });
