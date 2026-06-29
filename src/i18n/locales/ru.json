@@ -8,7 +8,8 @@
     "dayBlocked": "День заблокирован. Бронирование недоступно.",
     "viewOnlyBeyondHorizon": "Вне окна брони — только просмотр",
     "refreshing": "Обновляю…",
-    "cached": "Из кэша"
+    "cached": "Из кэша",
+    "updated": "Обновлено"
   },
   "status": { "libre": "Свободен", "ocupado": "Занят", "bloqueado": "Заблокирован", "pasado": "Прошёл", "pronto": "Скоро", "mine": "Моя" },
   "common": { "save": "Сохранить", "cancel": "Отмена", "back": "Назад", "confirm": "Подтвердить", "edit": "Редактировать", "loading": "Загрузка…" },

@@ -8,7 +8,8 @@
     "dayBlocked": "Día bloqueado. Reserva no disponible.",
     "viewOnlyBeyondHorizon": "Fuera del plazo de reserva — solo consulta",
     "refreshing": "Actualizando…",
-    "cached": "En caché"
+    "cached": "En caché",
+    "updated": "Actualizado"
   },
   "status": { "libre": "Libre", "ocupado": "Ocupado", "bloqueado": "Bloqueado", "pasado": "Pasado", "pronto": "Pronto", "mine": "Mía" },
   "common": { "save": "Guardar", "cancel": "Cancelar", "back": "Volver", "confirm": "Confirmar", "edit": "Editar", "loading": "Cargando…" },

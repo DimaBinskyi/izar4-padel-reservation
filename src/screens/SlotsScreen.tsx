@@ -194,13 +194,14 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
 
       <DateStrip todayYmd={today} selected={selected} onSelect={goToDate} />
 
-      {ready && (refreshing || !isFresh) && (
+      {ready && (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '0 0 6px' }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10.5, padding: '3px 10px', borderRadius: 20,
-            background: refreshing ? '#10261a' : '#241a00', color: refreshing ? '#7ee2a8' : '#f2c14e' }}>
+            background: refreshing ? '#10261a' : isFresh ? '#101a2b' : '#241a00',
+            color: refreshing ? '#7ee2a8' : isFresh ? '#86b7ff' : '#f2c14e' }}>
             {refreshing && <span style={{ display: 'inline-flex', transform: 'scale(0.65)' }}><Spinner /></span>}
             {refreshing ? t('slots.refreshing')
-              : `${t('slots.cached')}${snapshotTs ? ` · ${new Date(snapshotTs).toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' })}` : ''}`}
+              : `${isFresh ? t('slots.updated') : t('slots.cached')}${snapshotTs ? ` · ${new Date(snapshotTs).toLocaleString(i18n.language, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}`}
           </span>
         </div>
       )}
