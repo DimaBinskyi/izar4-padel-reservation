@@ -154,6 +154,8 @@
     "toastAdded": "Watching {{n}} slot(s)",
     "toastAlready": "Already watching these slots",
     "toastMerged": "Merged with your watch — now {{n}} slot(s)",
-    "limitWaiting": "waiting for weekly limit"
+    "limitWaiting": "waiting for weekly limit",
+    "toastFreeSome": "There are free slots in this range — book them. Watching only the busy ones ({{n}}).",
+    "toastFreeAll": "All selected slots are free — just book them."
   }
 }

@@ -17,20 +17,24 @@ export function WatchSheet({ fecha, franjas, reservations, vivienda, initialSlot
   const [to, setTo] = useState(initialSlot ?? ordered[ordered.length - 1]?.slot ?? '');
   const [watches, setWatches] = useState<Watch[]>(pruneExpiredWatches());   // drop date-passed watches on open
   const [info, setInfo] = useState<Watch | null>(null);                     // read-only details of a tapped watch
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ msg: string; warn: boolean } | null>(null);
   const preview = expandRange(ordered, from, to);
 
-  function showToast(msg: string) { setToast(msg); window.setTimeout(() => setToast((cur) => (cur === msg ? null : cur)), 3200); }
+  function showToast(msg: string, warn = false) { setToast({ msg, warn }); window.setTimeout(() => setToast((c) => (c?.msg === msg ? null : c)), 3800); }
 
-  // Watches are one-per-date covering a set of slots. Adding merges into that set (union):
-  // a subset is already covered (no-op), anything new merges the smaller into the bigger.
-  // Merges into a contiguous same-date watch; disjoint ranges (morning vs evening) stay separate.
+  // A watch only makes sense for OCCUPIED slots — a free slot is just bookable now, so drop the free
+  // ones (and warn). Then merge into a contiguous same-date watch; disjoint ranges stay separate.
   function save() {
     if (preview.length === 0) return;
-    const { status, count } = addOrMergeWatch(fecha, preview, ordered.map((f) => f.slot));
+    const occupied = new Set(reservations.filter((r) => r.fecha === fecha).map((r) => r.slot));
+    const watchSlots = preview.filter((s) => occupied.has(s));
+    if (watchSlots.length === 0) { showToast(t('watch.toastFreeAll'), true); return; }   // all free → book them, nothing to watch
+    const { status, count } = addOrMergeWatch(fecha, watchSlots, ordered.map((f) => f.slot));
     setWatches(loadWatches());
-    if (status !== 'already') void syncRegistration();
-    showToast(status === 'already' ? t('watch.toastAlready') : status === 'merged' ? t('watch.toastMerged', { n: count }) : t('watch.toastAdded', { n: count }));
+    if (status === 'already') { showToast(t('watch.toastAlready'), true); return; }
+    void syncRegistration();
+    if (watchSlots.length < preview.length) showToast(t('watch.toastFreeSome', { n: count }), true);   // some free slots were skipped
+    else showToast(status === 'merged' ? t('watch.toastMerged', { n: count }) : t('watch.toastAdded', { n: count }));
   }
   function drop(id?: string) { if (id) removeWatchById(id); setWatches(loadWatches()); setInfo(null); void syncRegistration(); }
   const slotTimes = (slots: string[]) => slots.map((s) => { const f = ordered.find((x) => x.slot === s); return f ? `${f.start}–${f.end}` : s; });
@@ -93,7 +97,10 @@ export function WatchSheet({ fecha, franjas, reservations, vivienda, initialSlot
 
       {toast && (
         <div style={{ position: 'fixed', left: 0, right: 0, top: 'calc(env(safe-area-inset-top) + 12px)', display: 'flex', justifyContent: 'center', zIndex: 70, pointerEvents: 'none' }}>
-          <div style={{ maxWidth: 360, margin: '0 14px', background: '#0e2018', border: '1px solid #234e34', color: '#a7e8c1', borderRadius: 12, padding: '10px 14px', fontSize: 12.5, boxShadow: '0 6px 20px rgba(0,0,0,.4)' }}>{toast}</div>
+          <div style={{ maxWidth: 360, margin: '0 14px', borderRadius: 12, padding: '10px 14px', fontSize: 12.5, boxShadow: '0 6px 20px rgba(0,0,0,.4)',
+            ...(toast.warn ? { background: '#241a00', border: '1px solid #4a3a12', color: '#f2c14e' } : { background: '#0e2018', border: '1px solid #234e34', color: '#a7e8c1' }) }}>
+            {toast.warn ? '⚠️ ' : ''}{toast.msg}
+          </div>
         </div>
       )}
     </div>
