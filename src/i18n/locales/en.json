@@ -6,7 +6,9 @@
     "loading": "Loading slots…",
     "error": "Failed to load slots.",
     "dayBlocked": "Day is blocked. Booking unavailable.",
-    "viewOnlyBeyondHorizon": "Beyond booking window — view only"
+    "viewOnlyBeyondHorizon": "Beyond booking window — view only",
+    "refreshing": "Refreshing…",
+    "cached": "Cached"
   },
   "status": { "libre": "Free", "ocupado": "Busy", "bloqueado": "Blocked", "pasado": "Past", "pronto": "Soon", "mine": "Mine" },
   "common": { "save": "Save", "cancel": "Cancel", "back": "Back", "confirm": "Confirm", "edit": "Edit", "loading": "Loading…" },

@@ -55,22 +55,35 @@ export default {
         return json({ grabbed: raw ? JSON.parse(raw) : [] });
       }
 
+      // Client-fed snapshot: the app fetches izar4 directly (from the user's fast IP) and POSTs the
+      // fresh list here so the Worker's snapshot (cron baseline + push owner-match + fast cache) stays
+      // current without the Worker polling izar4 from its WAF-throttled IP. The cron still re-polls
+      // independently (self-heals any bad feed within one cycle).
+      if (url.pathname === '/api/snapshot' && req.method === 'POST') {
+        const body = await req.json().catch(() => null);
+        // Ignore empty/invalid feeds so a client glitch can't blank the snapshot (real count is never 0).
+        const ok = Array.isArray(body) && body.length > 0;
+        if (ok) await putSnapshot(env, body as Resv[]);
+        return json({ ok });
+      }
+
       // Reservations served from the cron-maintained KV snapshot (fast). `?live=1` forces a fresh
       // paginated fetch (used right after a booking/cancel to reconcile the read-after-write lag).
       if (url.pathname === '/api/reservas' && req.method === 'GET') {
-        if (url.searchParams.get('live') !== '1') {
+        // Force-fresh (pull-to-refresh): fetch live now (ts = now); fall back to the last good snapshot
+        // if izar4 is unavailable (a failed/partial fetch must NOT overwrite it — handled in refreshSnapshot).
+        if (url.searchParams.get('live') === '1') {
+          const fresh = await refreshSnapshot(env);
+          if (fresh !== null) return snapshotResponse(JSON.stringify(fresh), Date.now());
           const snap = await env.KV.get('snapshot');
-          if (snap) return proxied(snap);
+          return snapshotResponse(snap ?? '[]', 0);
         }
-        const reservas = await fetchReservasPaged();
-        // A failed/partial upstream fetch (izar4 WAF 503s on bursts) must NOT overwrite the
-        // snapshot — that would blank every day's slots. Fall back to the last good snapshot.
-        if (reservas === null) {
-          const snap = await env.KV.get('snapshot');
-          return proxied(snap ?? '[]');
-        }
-        await env.KV.put('snapshot', JSON.stringify(reservas));
-        return proxied(JSON.stringify(reservas));
+        // Normal read: serve the snapshot (kept fresh by the cron + write-patches), with its creation
+        // time. We do NOT fetch izar4 here — client reads never hit the origin. Cold start only.
+        const { value, metadata } = await env.KV.getWithMetadata<{ ts: number }>('snapshot');
+        if (value !== null) return snapshotResponse(value, metadata?.ts ?? 0);
+        const fresh = await refreshSnapshot(env);
+        return snapshotResponse(JSON.stringify(fresh ?? []), Date.now());
       }
 
       // App writes (book/cancel) proxy to izar4, but on success we ALSO patch the KV snapshot
@@ -130,7 +143,7 @@ export default {
     const minute = now.getMinutes();
     const hour = now.getHours();
     const night = hour < 7;                       // 00:00–07:00
-    const due = night ? minute % 10 === 0 : minute % 2 === 0;
+    const due = night ? minute % 10 === 0 : minute % 2 === 0;  // every 2 min by day, every 10 min at night
     if (!due) return;
     await runPoll(env, now);
   },
@@ -142,6 +155,14 @@ function json(obj: unknown, status = 200): Response {
 
 function proxied(bodyText: string): Response {
   return new Response(bodyText, { status: 200, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...CORS } });
+}
+
+// Snapshot response carrying the snapshot's creation time (ms) so the client can show "cached at …".
+function snapshotResponse(bodyText: string, ts: number): Response {
+  return new Response(bodyText, { status: 200, headers: {
+    'content-type': 'application/json', 'cache-control': 'no-store',
+    'x-snapshot-ts': String(ts), 'access-control-expose-headers': 'x-snapshot-ts', ...CORS,
+  } });
 }
 
 function sleep(ms: number): Promise<void> { return new Promise((r) => setTimeout(r, ms)); }
@@ -167,6 +188,8 @@ interface Resv { id: number; fecha: string; slot: string; vivienda: string; nomb
 // Returns `null` (NOT `[]`) when the upstream fetch fails, so callers can tell "izar4 is
 // unavailable, keep the last good snapshot" apart from "there are genuinely zero reservations".
 async function fetchReservasPaged(): Promise<Resv[] | null> {
+  // Sequential pagination on purpose: izar4's WAF 503s on concurrent same-endpoint bursts (parallel
+  // pages measured 7–11s with escalating throttling vs ~1.8s sequential). Do NOT parallelize this.
   const raw: any[] = [];
   for (let page = 1; page <= 5; page++) {
     const res = await izar4Fetch(`${IZAR4}/wp-json/wp/v2/reservas?per_page=100&page=${page}&recurso=${TERM}&_fields=id,acf`,
@@ -184,6 +207,19 @@ async function fetchReservasPaged(): Promise<Resv[] | null> {
     vivienda: r.acf.vivienda_reservas ?? '',
     nombre: r.acf.nombre_reservas ?? '',
   }));
+}
+
+// Write the snapshot with a freshness timestamp (read back via getWithMetadata for stale-while-revalidate).
+async function putSnapshot(env: Env, reservas: Resv[]): Promise<void> {
+  await env.KV.put('snapshot', JSON.stringify(reservas), { metadata: { ts: Date.now() } });
+}
+
+// Fetch the live list and store it as the snapshot. Returns null (and leaves the snapshot untouched)
+// when izar4 is unavailable, so a failure never blanks the data.
+async function refreshSnapshot(env: Env): Promise<Resv[] | null> {
+  const reservas = await fetchReservasPaged();
+  if (reservas !== null) await putSnapshot(env, reservas);
+  return reservas;
 }
 
 // Keep the KV snapshot in step with an app booking/cancel so reads reflect it without waiting for
@@ -204,7 +240,7 @@ async function patchSnapshot(env: Env, isBook: boolean, reqBody: string, resp: a
       const idReserva = Number(b.idReserva);
       snap = snap.filter((r) => r.id !== idReserva);
     }
-    await env.KV.put('snapshot', JSON.stringify(snap));
+    await putSnapshot(env, snap);
   } catch { /* best-effort */ }
 }
 
@@ -224,7 +260,7 @@ async function runPoll(env: Env, now: Date): Promise<void> {
   const prevKeys = prev.map((r) => `${r.fecha}|${r.slot}`);
   const prevByKey = new Map(prev.map((r) => [`${r.fecha}|${r.slot}`, r]));
   const { freed } = diffSnapshots(prevKeys, occupied);
-  await env.KV.put('snapshot', JSON.stringify(reservas));
+  await putSnapshot(env, reservas);
   if (prev.length === 0) return; // first run: just seed the snapshot, no notifications
 
   const todayYmd = dateToYmd(now);

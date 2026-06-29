@@ -1,5 +1,9 @@
 // Static facts about the izar4 padel resource (see docs/API.md).
-export const API_BASE = '/api/wp-json';        // proxied through the Worker
+// izar4 sends permissive CORS, so the client queries it DIRECTLY from the user's own IP (fast — the
+// Worker's single IP gets WAF-throttled). The Worker proxy stays as a fallback when direct fails.
+export const IZAR4_BASE = 'https://izar4.es/wp-json';        // direct (client → izar4, user IP)
+export const IZAR4_APP_BASE = 'https://izar4.es/wp-json/app/v1';
+export const API_BASE = '/api/wp-json';        // Worker proxy (fallback)
 export const APP_API_BASE = '/api/wp-json/app/v1';
 export const PADEL_SLUG = 'padel';
 export const PADEL_TERM_ID = 12;               // taxonomy term id for filtering

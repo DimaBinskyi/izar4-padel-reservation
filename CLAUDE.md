@@ -15,10 +15,17 @@ won't pay Apple and won't run a real backend, so the only always-on piece is **o
 Cloudflare Worker**.
 
 ## Architecture
-`PWA (React + service worker)` ⇄ `1 Cloudflare Worker` ⇄ `izar4 WP REST API`, plus **Web Push
-(VAPID)** straight to the device. The Worker: proxies izar4 (CORS), stores push
-subscriptions/profile/watchlist/prefs in **KV**, and runs a **Cron** poll → diff → auto-grab →
-push. All personal data also lives on-device.
+`PWA (React + service worker)` talks to **izar4 WP REST API directly** (izar4 sends permissive CORS),
+plus **Web Push (VAPID)** to the device. **1 Cloudflare Worker** is the side-channel: it stores the
+reservations **snapshot** + push subs/profile/watchlist/prefs in **KV**, runs the **Cron** (poll →
+diff → auto-grab → push), receives the client's snapshot **feed** (`POST /api/snapshot`), and serves
+the PWA. It also still **proxies izar4 as a fallback** for when a direct call fails.
+
+**Why direct-from-client:** izar4's WAF throttles by per-IP volume. The Worker is a single IP → all
+traffic funnels through it → it gets throttled (live fetch 6–12s). Each user's device is its own IP
+with low volume → fast (~0.8s). So reads AND writes go **direct from the client** (user's IP), and the
+client **feeds** the result to the Worker so its snapshot/push-baseline stays fresh without the Worker
+polling izar4 itself. The Cron still polls (needed to detect freed slots when the app is closed).
 
 ## Repo layout
 ```
@@ -45,12 +52,13 @@ worker/      Cloudflare Worker — KV + Cron + Web Push (VAPID)      (added duri
 - **Calendar:** month view, min day = today; days beyond the 21-day horizon are view-only. Day changes via tapping the date strip (no swipe/carousel — that was tried and removed).
 
 ## izar4 gotchas (see docs/API.md §4)
-- Call izar4 **only through the Worker proxy** — direct browser calls fail CORS.
+- **izar4 sends permissive CORS** (reflects our origin, allows GET/POST + preflight) — verified live in-browser. So the client calls izar4 **directly** (`IZAR4_BASE`/`IZAR4_APP_BASE` in `config.ts`); the Worker proxy (`API_BASE`) is only a **fallback** when a direct call network-fails. (The old "direct fails CORS" assumption was wrong.)
+- **Never blank the snapshot from a client feed:** `POST /api/snapshot` ignores empty arrays (real count is never 0) so a client glitch / failed direct fetch can't zero it out.
 - **Read-after-write lag:** after `reservar`, the list may not show the new row immediately. Use
   cache-busting + optimistic UI + reconcile on next poll.
 - Server ignores its own rule limits (7-day / 3-week / 1-day) — verified by testing.
 - Date formats vary (`YYYYMMDD` vs `dd/mm/yyyy`); weekday codes `D L M X J V S` (Sun=0).
-- izar4's WAF **503s on concurrent request bursts** → the client loads sequentially + session-caches static data (franjas/blocks/inmuebles); the Worker proxy retries 503 and KV-caches static GETs.
+- izar4's WAF can **503 on concurrent bursts**, but izar4 itself serves parallel requests fine (its own site fires ~8 at once). So: the client fetches its independent endpoints **in parallel** (`Promise.all` — franjas/blocks are KV-cached at the Worker, so most calls hit our edge, not izar4) and session-caches static data; the Worker proxy retries 503 and KV-caches static GETs. Keep the Worker's **same-endpoint reservas pagination sequential** (that's the burst pattern most likely to trip the WAF).
 - Reservations come from the cron-maintained KV **snapshot** via `GET /api/reservas` (~80ms vs 0.5–6s direct); `?live=1` forces a fresh fetch. **Use `live=1` only right after a write** (read-after-write reconcile) — NOT on day navigation; the snapshot already holds every date, so the client derives the new day's slots from it instantly. Forcing `live` on navigation is slow and risks snapshot poisoning (below).
 - **Never overwrite the snapshot with a failed/partial fetch.** izar4's WAF can 503 mid-fetch; `fetchReservasPaged()` returns `null` on upstream failure (vs `[]` for genuinely zero). Both the `live=1` endpoint and the cron must keep the last good snapshot when it's `null` — otherwise every day's slots render empty/free until the next good poll ("empty slots" bug).
 - The Worker proxy's cacheable-path check matches the full path `/wp-json/wp/v2/...` (NOT `/wp/v2/...`) — a mismatch silently disables caching.

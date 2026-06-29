@@ -6,7 +6,9 @@
     "loading": "Cargando turnos…",
     "error": "Error al cargar los turnos.",
     "dayBlocked": "Día bloqueado. Reserva no disponible.",
-    "viewOnlyBeyondHorizon": "Fuera del plazo de reserva — solo consulta"
+    "viewOnlyBeyondHorizon": "Fuera del plazo de reserva — solo consulta",
+    "refreshing": "Actualizando…",
+    "cached": "En caché"
   },
   "status": { "libre": "Libre", "ocupado": "Ocupado", "bloqueado": "Bloqueado", "pasado": "Pasado", "pronto": "Pronto", "mine": "Mía" },
   "common": { "save": "Guardar", "cancel": "Cancelar", "back": "Volver", "confirm": "Confirmar", "edit": "Editar", "loading": "Cargando…" },

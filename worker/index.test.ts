@@ -61,6 +61,19 @@ describe('worker proxy', () => {
     expect(store.get('snapshot')).toBe(JSON.stringify([{ id: 9, fecha: '20260703', slot: 'P1-2', vivienda: 'A1', nombre: 'Test' }]));
   });
 
+  it('client-fed /api/snapshot stores a non-empty list but ignores an empty one (no blanking)', async () => {
+    const store = new Map<string, string>([['snapshot', '[{"id":1,"fecha":"20260628","slot":"P1-1"}]']]);
+    const env = { ...ENV, KV: { get: async (k: string) => store.get(k) ?? null, put: async (k: string, v: string) => { store.set(k, v); } } } as any;
+    const feed = [{ id: 7, fecha: '20260703', slot: 'P1-2', vivienda: 'A1', nombre: 'Ana' }];
+    const post = (b: unknown) => worker.fetch(new Request('https://app.dev/api/snapshot', {
+      method: 'POST', headers: { 'x-device-secret': 's3cret', 'content-type': 'application/json' }, body: JSON.stringify(b),
+    }), env);
+    expect(await (await post(feed)).json()).toEqual({ ok: true });
+    expect(JSON.parse(store.get('snapshot')!)).toEqual(feed);
+    expect(await (await post([])).json()).toEqual({ ok: false });   // empty ignored
+    expect(JSON.parse(store.get('snapshot')!)).toEqual(feed);        // unchanged
+  });
+
   it('forwards POST body to izar4 with secret', async () => {
     const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response('{"ok":true,"id":99}', { status: 200, headers: { 'content-type': 'application/json' } }),

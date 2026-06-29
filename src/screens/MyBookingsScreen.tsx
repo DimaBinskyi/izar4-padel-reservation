@@ -25,7 +25,7 @@ export function MyBookingsScreen({ profile, onOpenSlot }: { profile: Profile; on
     if (!live) { setRows(null); setError(null); }   // only show the skeleton on the instant (snapshot) pass
     try {
       const [allRaw, franjas, log] = await Promise.all([fetchAllReservations(secret, live), fetchFranjas(secret), listBookings()]);
-      const all = applyOverrides(allRaw);
+      const all = applyOverrides(allRaw.reservas);
       const fmap = new Map(franjas.map((f) => [f.slot, f]));
       const lmap = new Map<string, BookingRecord>(log.map((r) => [`${r.fecha}|${r.slot}`, r]));
       const mine = all
@@ -64,7 +64,7 @@ export function MyBookingsScreen({ profile, onOpenSlot }: { profile: Profile; on
     addRecentAction(res.fecha, res.slot);
     addOverride({ key: `${res.fecha}|${res.slot}`, type: 'remove' });
     void syncRegistration();
-    await load();
+    await load(true);            // direct live re-read from izar4 + feed the Worker
     setCancelRow(null);
     return true;
   }

@@ -31,21 +31,23 @@ interface SlotsScreenProps {
 }
 
 export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps = {}) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const today = dateToYmd(new Date());
   const [selected, setSelected] = useState(today);
 
-  // The selected day is (re)fetched LIVE from izar4 on every landing (open / day change / return),
-  // so the day you're viewing is always current. Slots are derived from `allRes`; the weekly limit
-  // is counted from the same fetch (izar4 returns all reservations in one request, so a single live
-  // call covers both the day's slots and the week's count).
+  // izar4 returns ALL reservations in one request, so `allRes` already holds every day. Switching
+  // days re-derives instantly from it (no per-day fetch, no spinner); we refresh it live in the
+  // BACKGROUND on landing/focus so the data stays current without ever blocking the UI. The weekly
+  // limit is counted from the same data.
   const [allRes, setAllRes] = useState<Reservation[]>([]);
   const [franjas, setFranjas] = useState<Franja[]>([]);
   const [weekdayBlocks, setWeekdayBlocks] = useState<WeekdayBlockSet>({});
   const [dayBlocks, setDayBlocks] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
-  const [loadingDay, setLoadingDay] = useState(false);   // a day's live fetch is in flight → show spinner
-  const loadSeq = useRef(0);                              // drop out-of-order responses from rapid day taps
+  const [refreshing, setRefreshing] = useState(false);   // a refresh is in flight → show the "syncing" pill
+  const [isFresh, setIsFresh] = useState(false);         // shown data was pulled live (vs the snapshot/cache)
+  const [snapshotTs, setSnapshotTs] = useState(0);       // when the shown snapshot was made (ms epoch)
+  const loadSeq = useRef(0);                       // drop out-of-order responses (rapid day taps / refreshes)
   const ready = franjas.length > 0;   // first load finished → real data to show
 
   const [profile, setProfile] = useState<Profile | null>(loadProfile());
@@ -58,45 +60,56 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
   const secret = getDeviceSecret();
   const needProfile = !isProfileComplete(profile);
 
-  // `live` → fetch fresh from izar4 (the default for landing on a day); `spinner` → show the per-day
-  // loading spinner while in flight. A sequence guard drops responses superseded by a newer load
-  // (e.g. tapping through days quickly), so the list never shows a stale day.
-  const load = useCallback(async (live = false, spinner = false) => {
+  // `live` → fresh from izar4, else the fast snapshot. A sequence guard drops responses superseded
+  // by a newer load so the list never shows stale data after rapid day taps / overlapping refreshes.
+  // Read reservations + static data and apply them. `live` → force-fresh from izar4 (pull-to-refresh);
+  // otherwise the fast snapshot, which the Worker keeps fresh in the background (stale-while-revalidate).
+  // A sequence guard drops responses superseded by a newer load so the list never shows a stale day.
+  const load = useCallback(async (live = false) => {
     const seq = ++loadSeq.current;
-    if (spinner) setLoadingDay(true);
     setError(null);
     try {
-      const f = await fetchFranjas(secret);          // session-cached
-      const wb = await fetchWeekdayBlocks(secret);    // session-cached
-      const all = applyOverrides(await fetchAllReservations(secret, live));
-      const db = await fetchDayBlocks(secret);        // worker-cached
+      // Fetch the four endpoints in parallel: they're independent, the Worker KV-caches the static
+      // ones (franjas/blocks) so concurrent calls mostly hit our edge — not izar4 — and the Worker
+      // retries any rare WAF 503. Cold-load wall-clock drops from the sum (~2.5s) to ~one request.
+      const [f, wb, allRaw, db] = await Promise.all([
+        fetchFranjas(secret),
+        fetchWeekdayBlocks(secret),
+        fetchAllReservations(secret, live),
+        fetchDayBlocks(secret),
+      ]);
       if (seq !== loadSeq.current) return;            // a newer load started → drop this stale result
-      setFranjas(f); setWeekdayBlocks(wb); setAllRes(all); setDayBlocks(db);
-    } catch {
-      if (seq === loadSeq.current) setError(t('slots.error'));
-    } finally {
-      if (seq === loadSeq.current) setLoadingDay(false);
-    }
+      setFranjas(f); setWeekdayBlocks(wb); setAllRes(applyOverrides(allRaw.reservas)); setDayBlocks(db); setSnapshotTs(allRaw.ts);
+    } catch { if (seq === loadSeq.current) setError(t('slots.error')); }
   }, [secret, t]);
 
-  useEffect(() => { void load(true, true); }, [load]);   // open → live fetch of today, with spinner
-
-  // Re-fetch the current day live when the app/tab regains focus (background, no spinner) so it stays
-  // fresh after switching away to the website. Explicit refresh-now is pull-to-refresh.
-  useEffect(() => {
-    const reconcile = () => { if (document.visibilityState === 'visible') void load(true, false); };
-    document.addEventListener('visibilitychange', reconcile);
-    window.addEventListener('focus', reconcile);
-    return () => {
-      document.removeEventListener('visibilitychange', reconcile);
-      window.removeEventListener('focus', reconcile);
-    };
+  // Live refresh: fetch DIRECTLY from izar4 (the user's fast IP — bypasses the WAF-throttled Worker)
+  // and feed the result to the Worker so its snapshot stays fresh.
+  const forceLive = useCallback(async () => {
+    setRefreshing(true);
+    await load(true);
+    setRefreshing(false); setIsFresh(true);
   }, [load]);
 
-  // Jump to a slot (from My bookings): switch date, live-fetch it (with spinner), then blink it for 3s.
+  // On open: render the Worker snapshot instantly (fast cache, with its "cached · HH:MM" time), then
+  // pull live current data directly from izar4 (user IP, ~fast) and replace it.
+  useEffect(() => { void (async () => { await load(false); await forceLive(); })(); }, [load, forceLive]);
+
+  // Re-fetch live (direct) when the app/tab regains focus.
   useEffect(() => {
-    if (focus) { setSelected(focus.fecha); setHighlightSlot(focus.slot); void load(true, true); onFocusConsumed?.(); }
-  }, [focus, onFocusConsumed, load]);
+    const onVisible = () => { if (document.visibilityState === 'visible') void forceLive(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [forceLive]);
+
+  // Jump to a slot (from My bookings): switch date (instant from allRes), refresh live, blink 3s.
+  useEffect(() => {
+    if (focus) { setSelected(focus.fecha); setHighlightSlot(focus.slot); void forceLive(); onFocusConsumed?.(); }
+  }, [focus, onFocusConsumed, forceLive]);
   useEffect(() => {
     if (!highlightSlot) return;
     const id = window.setTimeout(() => setHighlightSlot(null), 3000);
@@ -107,9 +120,8 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
   const beyondHorizon = selected > addDays(today, BOOKING_HORIZON_DAYS);
 
   function goToDate(d: string) {
-    setSelected(d);
+    setSelected(d);          // instant from in-memory allRes (it already holds every day; no fetch)
     setHighlightSlot(null);
-    void load(true, true);   // live fetch of the day being opened (incl. returning to it), with spinner
   }
 
   async function doBook(slot: SlotView) {
@@ -126,8 +138,8 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     addRecentAction(selected, slot.franja.slot);
     addOverride({ key: bookingKey(selected, slot.franja.slot), type: 'add', res: { id: r.id ?? 0, slot: slot.franja.slot, fecha: selected, nombre: profile.nombre, vivienda: profile.vivienda.toUpperCase() } });
     void syncRegistration();
-    await load();                // refresh from the snapshot (worker patched it on the write) — fast,
-    setBookSlot(null);           // and real: the modal closes only after the confirmed state is loaded
+    await forceLive();           // direct live re-read from izar4 + feed the Worker (override bridges the write lag)
+    setBookSlot(null);           // modal closes only after the confirmed state is loaded
   }
 
   async function doCancel(slot: SlotView, codigo: string): Promise<boolean> {
@@ -138,7 +150,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     addRecentAction(selected, slot.franja.slot);
     addOverride({ key: bookingKey(selected, slot.franja.slot), type: 'remove' });
     void syncRegistration();
-    await load();                // snapshot refresh (worker patched it on the cancel) — fast + real
+    await forceLive();           // direct live re-read from izar4 + feed the Worker
     setCancelSlot(null);
     return true;
   }
@@ -157,7 +169,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
 
   return (
     <div style={{ maxWidth: 420, margin: '0 auto' }}>
-      <PullToRefresh onRefresh={() => load(true)}>
+      <PullToRefresh onRefresh={forceLive}>
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px' }}>
         <button aria-label="watch" onClick={() => setWatchOpen(true)}
           style={{ border: 'none', background: '#16202e', color: '#cfe0f5', borderRadius: 8, padding: '6px 10px', fontSize: 12 }}>🎯 {t('watch.title')}</button>
@@ -175,15 +187,26 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
 
       <DateStrip todayYmd={today} selected={selected} onSelect={goToDate} />
 
+      {ready && (refreshing || !isFresh) && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '0 0 6px' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10.5, padding: '3px 10px', borderRadius: 20,
+            background: refreshing ? '#10261a' : '#241a00', color: refreshing ? '#7ee2a8' : '#f2c14e' }}>
+            {refreshing && <span style={{ display: 'inline-flex', transform: 'scale(0.65)' }}><Spinner /></span>}
+            {refreshing ? t('slots.refreshing')
+              : `${t('slots.cached')}${snapshotTs ? ` · ${new Date(snapshotTs).toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' })}` : ''}`}
+          </span>
+        </div>
+      )}
+
       <div style={{ padding: '2px 10px 8px', minHeight: '60vh' }}>
         {error && <div style={{ padding: 16, color: '#ff9b9b' }}>{error}</div>}
-        {!error && (loadingDay || !ready) && (
+        {!error && !ready && (
           <div style={{ display: 'flex', justifyContent: 'center', padding: '32px 0', color: '#8aa0bd' }}><Spinner /></div>
         )}
-        {!error && !loadingDay && ready && dayBlocks[selected] !== undefined && (
+        {!error && ready && dayBlocks[selected] !== undefined && (
           <div style={{ padding: 16, color: '#f2c14e' }}>{dayBlocks[selected] || t('slots.dayBlocked')}</div>
         )}
-        {!error && !loadingDay && ready && dayBlocks[selected] === undefined && slots.map((s) => (
+        {!error && ready && dayBlocks[selected] === undefined && slots.map((s) => (
           <SlotRow key={s.franja.slot} slot={s}
             mine={!!(s.reservation && profile && isMine(s.reservation, profile))}
             canBook={!beyondHorizon}

@@ -33,12 +33,12 @@ describe('izar4Client', () => {
     expect(out[0].nombre).toBe('Ana');
   });
 
-  it('sends the device secret header', async () => {
+  it('reads directly from izar4 (no device secret on direct calls)', async () => {
     const spy = mockJson([]);
     await fetchFranjas('secret');
-    const req = spy.mock.calls[0][0] as Request;
+    const url = String(spy.mock.calls[0][0]);
+    expect(url).toContain('izar4.es/wp-json/wp/v2/franjas');   // direct, not the Worker proxy
     const headers = (spy.mock.calls[0][1] as RequestInit)?.headers as Record<string, string> | undefined;
-    const sent = headers?.['x-device-secret'] ?? new Headers(req.headers).get('x-device-secret');
-    expect(sent).toBe('secret');
+    expect(headers?.['x-device-secret']).toBeUndefined();       // izar4 doesn't accept that header
   });
 });
