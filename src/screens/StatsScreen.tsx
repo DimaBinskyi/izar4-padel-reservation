@@ -1,17 +1,53 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { listBookings, type BookingRecord } from '../lib/bookingsDb';
+import { listBookings, bookingKey, type BookingRecord } from '../lib/bookingsDb';
 import { aggregate, periodRange, type Period } from '../lib/stats';
+import { fetchAllReservations, fetchFranjas } from '../lib/izar4Client';
+import { getDeviceSecret } from '../lib/deviceSecret';
+import { applyOverrides } from '../lib/overrides';
+import { isMine } from '../lib/mine';
 import { dateToYmd, ymdToDate } from '../lib/dates';
 import { PullToRefresh } from '../components/PullToRefresh';
+import type { Profile } from '../lib/profile';
 
-export function StatsScreen() {
+export function StatsScreen({ profile }: { profile?: Profile | null }) {
   const { t, i18n } = useTranslation();
   const today = dateToYmd(new Date());
+  const secret = getDeviceSecret();
   const [period, setPeriod] = useState<Period>('month');
   const [log, setLog] = useState<BookingRecord[]>([]);
 
-  const loadLog = useCallback(async () => { try { setLog(await listBookings()); } catch { setLog([]); } }, []);
+  // Stats must reflect ALL of the user's bookings, not only app-created ones. The local IndexedDB log
+  // alone misses bookings made on the izar4 site or another device (and any FUTURE ones) — exactly what
+  // "My bookings" shows. So merge: the izar4 snapshot is the source of truth for what's currently booked
+  // (past + upcoming), and the local log adds cancelled history + the booking origin (app/auto). Reads the
+  // fast snapshot (live=false) — no extra izar4 traffic.
+  const loadLog = useCallback(async () => {
+    let local: BookingRecord[] = [];
+    try { local = await listBookings(); } catch { /* IndexedDB unavailable */ }
+    if (!profile) { setLog(local); return; }
+    try {
+      const [allRaw, franjas] = await Promise.all([fetchAllReservations(secret, false), fetchFranjas(secret)]);
+      const lmap = new Map(local.map((r) => [r.key, r]));
+      const fmap = new Map(franjas.map((f) => [f.slot, f]));
+      const merged = new Map<string, BookingRecord>();
+      for (const rec of local) if (rec.status === 'cancelled') merged.set(rec.key, rec);   // cancelled history (gone from izar4)
+      for (const res of applyOverrides(allRaw.reservas)) {                                  // currently booked (past+future) = truth
+        if (!isMine(res, profile)) continue;
+        const key = bookingKey(res.fecha, res.slot);
+        const rec = lmap.get(key);
+        const f = fmap.get(res.slot);
+        merged.set(key, {
+          key, reservaId: res.id, fecha: res.fecha, slot: res.slot,
+          start: f?.start ?? rec?.start ?? '', end: f?.end ?? rec?.end ?? '',
+          nombre: rec?.nombre ?? res.nombre ?? '', vivienda: rec?.vivienda ?? res.vivienda ?? '',
+          codigoUsed: rec?.codigoUsed ?? '', origin: rec?.origin ?? 'izar4',
+          status: 'active', createdAt: rec?.createdAt ?? 0, cancelledAt: rec?.cancelledAt,
+        });
+      }
+      setLog([...merged.values()]);
+    } catch { setLog(local); }   // offline / no snapshot → fall back to the local log
+  }, [secret, profile]);
   useEffect(() => { void loadLog(); }, [loadLog]);
 
   const range = useMemo(() => periodRange(period, today), [period, today]);

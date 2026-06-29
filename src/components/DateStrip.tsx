@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { addDays, ymdToDate } from '../lib/dates';
 import { CALENDAR_DAYS, BOOKING_HORIZON_DAYS } from '../config';
@@ -14,6 +15,12 @@ export function DateStrip({ todayYmd, selected, onSelect }: Props) {
   const fmtW = new Intl.DateTimeFormat(i18n.language, { weekday: 'short' });
   const fmtM = new Intl.DateTimeFormat(i18n.language, { month: 'short' });
 
+  // Keep the selected day visible — e.g. a deep-link from a push can select a day that's scrolled
+  // off to the right; without this the highlight is there but not on screen. (today is index 0, so
+  // centering it at mount is a no-op — nothing to its left to scroll.)
+  const selRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => { selRef.current?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }, [selected]);
+
   return (
     <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '6px 14px 10px' }}>
       {days.map((ymd, i) => {
@@ -23,6 +30,7 @@ export function DateStrip({ todayYmd, selected, onSelect }: Props) {
         return (
           <button
             key={ymd}
+            ref={sel ? selRef : undefined}
             onClick={() => onSelect(ymd)}
             style={{
               flex: '0 0 auto', width: 46, textAlign: 'center', padding: '7px 0',

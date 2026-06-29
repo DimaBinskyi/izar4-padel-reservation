@@ -40,6 +40,34 @@ export default {
       // app endpoints handled by the worker (not proxied)
       if (url.pathname === '/api/vapid') return json({ publicKey: env.VAPID_PUBLIC });
 
+      // Manual test push (secret-gated). Sends freed/grabbed/myCancelled (or ?type=) to every subscribed
+      // device, each carrying a real franja focus so you can tap it and verify the deep-link + blink.
+      // Bypasses prefs/quiet-hours on purpose. Override with ?type=&fecha=YYYYMMDD&slot=P1-6.
+      if (url.pathname === '/api/test-push' && req.method === 'GET') {
+        const vapid: Vapid = { subject: env.VAPID_SUBJECT, publicKey: env.VAPID_PUBLIC, privateKey: env.VAPID_PRIVATE };
+        const fRes = await izar4Fetch(`${IZAR4}/wp-json/wp/v2/franjas?per_page=100&recurso=${TERM}&_fields=id,title,acf`, { method: 'GET', headers: { 'content-type': 'application/json' } });
+        const franjasRaw = (fRes.ok ? await fRes.json().catch(() => []) : []) as any[];
+        const fmap: Record<string, string> = {};
+        for (const f of franjasRaw) { const id = f.title?.rendered ?? ''; if (id) fmap[id] = (f.acf?.hora_inicio_franjas ?? '').slice(0, 5); }
+        const slots = Object.keys(fmap);
+        const fecha = url.searchParams.get('fecha') || dateToYmd(new Date());
+        const wanted = url.searchParams.get('type');
+        const types = wanted ? [wanted] : ['freed', 'grabbed', 'myCancelled'];
+        const plan = types.map((type, i) => { const slot = url.searchParams.get('slot') || slots[i % Math.max(slots.length, 1)] || 'P1-6'; return { type, slot, time: fmap[slot] ?? '' }; });
+        const list = await env.KV.list({ prefix: 'device:' });
+        const seen = new Set<string>(); const sent: { device: string; type: string; slot: string; ok: boolean }[] = [];
+        for (const k of list.keys) {
+          const rec = JSON.parse((await env.KV.get(k.name))!) as DeviceRecord;
+          const ep = rec.subscription?.endpoint; if (!ep || seen.has(ep)) continue; seen.add(ep);
+          for (const p of plan) {
+            const text = buildPushText(rec.locale ?? 'uk', p.type, { time: p.time, fecha, slot: p.slot });
+            const ok = await sendPush(rec.subscription, { title: text.title, body: text.body, url: '/', focus: { fecha, slot: p.slot } }, vapid);
+            sent.push({ device: k.name, type: p.type, slot: p.slot, ok });
+          }
+        }
+        return json({ fecha, devices: list.keys.length, sent });
+      }
+
       if (url.pathname === '/api/subscribe' && req.method === 'POST') {
         const deviceId = url.searchParams.get('device') ?? '';
         if (!deviceId) return json({ ok: false, error: 'no device' }, 400);

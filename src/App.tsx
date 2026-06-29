@@ -56,7 +56,7 @@ export default function App() {
           <MyBookingsScreen profile={profile}
             onOpenSlot={(fecha, slot) => { setSlotFocus({ fecha, slot }); setTab('slots'); }} />
         ) : null)}
-        {tab === 'stats' && <StatsScreen />}
+        {tab === 'stats' && <StatsScreen profile={profile} />}
         {tab === 'settings' && profile && <SettingsScreen profile={profile} onProfileSaved={(p) => setProfile(p)} />}
       </div>
       <NavBar tab={tab} onChange={go} />
