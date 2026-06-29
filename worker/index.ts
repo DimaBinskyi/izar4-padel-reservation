@@ -245,8 +245,11 @@ async function patchSnapshot(env: Env, isBook: boolean, reqBody: string, resp: a
 }
 
 async function runPoll(env: Env, now: Date): Promise<void> {
-  // 1. fetch franjas (times) + reservations across the horizon
-  const franjasRaw = await (await fetch(`${IZAR4}/wp-json/wp/v2/franjas?per_page=100&recurso=${TERM}&_fields=id,title,acf`, { cache: 'no-store' })).json() as any[];
+  // 1. fetch franjas (times) + reservations across the horizon. NOTE: Cloudflare Workers' fetch does
+  // NOT support RequestInit.cache — passing it throws and crashed the whole cron (so pushes never
+  // fired). Use izar4Fetch (503-retry) and guard the JSON parse.
+  const fRes = await izar4Fetch(`${IZAR4}/wp-json/wp/v2/franjas?per_page=100&recurso=${TERM}&_fields=id,title,acf`, { method: 'GET', headers: { 'content-type': 'application/json' } });
+  const franjasRaw = (fRes.ok ? await fRes.json().catch(() => []) : []) as any[];
   const franjas: FranjaMap = {};
   for (const f of franjasRaw) franjas[f.title?.rendered ?? ''] = { start: (f.acf?.hora_inicio_franjas ?? '00:00').slice(0, 5) };
 
@@ -270,9 +273,15 @@ async function runPoll(env: Env, now: Date): Promise<void> {
   const list = await env.KV.list({ prefix: 'device:' });
   const vapid: Vapid = { subject: env.VAPID_SUBJECT, publicKey: env.VAPID_PUBLIC, privateKey: env.VAPID_PRIVATE };
 
+  // Dedup by push-subscription endpoint: a re-subscribe (e.g. after the baked device-secret changed)
+  // can leave two device records for the SAME physical device, which would double every push.
+  const seenEndpoints = new Set<string>();
+
   for (const k of list.keys) {
     const rec = JSON.parse((await env.KV.get(k.name))!) as DeviceRecord;
     if (!rec.prefs?.master) continue;
+    const endpoint = rec.subscription?.endpoint;
+    if (endpoint) { if (seenEndpoints.has(endpoint)) continue; seenEndpoints.add(endpoint); }
     const deviceId = k.name.slice('device:'.length);
     let changed = false;
     const grabbedOut: any[] = [];
@@ -299,8 +308,12 @@ async function runPoll(env: Env, now: Date): Promise<void> {
 
     // 3b. generic freed-slot notifications (next 7 days), excluding auto-grabbed-by-this-device
     if (rec.prefs.types.freed) {
+      const myV = rec.profile.vivienda.trim().toUpperCase();
+      const myN = rec.profile.nombre.trim().toLowerCase();
       for (const key of weekFreed) {
         if (rec.prefs.suppressSelf && (rec.recentActions ?? []).includes(key)) continue;
+        const o = prevByKey.get(key);   // your OWN cancelled booking → covered by myCancelled, don't also send generic "freed"
+        if (o && o.vivienda.trim().toUpperCase() === myV && o.nombre.trim().toLowerCase() === myN) continue;
         const [fecha, slot] = key.split('|');
         if (grabbedOut.some((g) => g.fecha === fecha && g.slot === slot)) continue;
         await maybePush(rec, 'freed', { time: franjas[slot]?.start ?? '', fecha }, vapid, now);
@@ -342,7 +355,8 @@ async function maybePush(rec: DeviceRecord, type: string, params: PushParams, va
     if (inQuiet && !rec.prefs.quiet.nightAllowed?.[type]) return;
   }
   const text = buildPushText(rec.locale ?? 'uk', type, params);
-  await sendPush(rec.subscription, { title: text.title, body: text.body, url: '/' }, vapid);
+  try { await sendPush(rec.subscription, { title: text.title, body: text.body, url: '/' }, vapid); }
+  catch { /* a stale/expired subscription must not break the rest of the device loop */ }
 }
 
 async function createReservation(profile: { nombre: string; vivienda: string; codigo: string }, fecha: string, slot: string): Promise<{ ok: boolean; id?: number }> {

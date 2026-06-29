@@ -55,6 +55,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
   const [bookSlot, setBookSlot] = useState<SlotView | null>(null);
   const [cancelSlot, setCancelSlot] = useState<SlotView | null>(null);
   const [watchOpen, setWatchOpen] = useState(false);
+  const [watchSlot, setWatchSlot] = useState<string | null>(null);   // slot to pre-select in the watch sheet (null = full day)
   const [highlightSlot, setHighlightSlot] = useState<string | null>(null);
 
   const secret = getDeviceSecret();
@@ -178,7 +179,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     <div style={{ maxWidth: 420, margin: '0 auto' }}>
       <PullToRefresh onRefresh={pullRefresh}>
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px' }}>
-        <button aria-label="watch" onClick={() => setWatchOpen(true)}
+        <button aria-label="watch" onClick={() => { setWatchSlot(null); setWatchOpen(true); }}
           style={{ border: 'none', background: '#16202e', color: '#cfe0f5', borderRadius: 8, padding: '6px 10px', fontSize: 12 }}>🎯 {t('watch.title')}</button>
         <span style={{ fontSize: 17, fontWeight: 700 }}>{t('app.title')}</span>
         <button aria-label="profile" onClick={() => setEditingProfile(true)}
@@ -219,7 +220,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
             mine={!!(s.reservation && profile && isMine(s.reservation, profile))}
             canBook={!beyondHorizon}
             highlight={highlightSlot === s.franja.slot}
-            onBook={() => tryBook(s)} onCancel={() => setCancelSlot(s)} onWatch={() => setWatchOpen(true)} />
+            onBook={() => tryBook(s)} onCancel={() => setCancelSlot(s)} onWatch={() => { setWatchSlot(s.franja.slot); setWatchOpen(true); }} />
         ))}
       </div>
       </PullToRefresh>
@@ -238,7 +239,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
         <CancelModal slot={cancelSlot} fecha={selected} profile={profile}
           onConfirm={(codigo) => doCancel(cancelSlot, codigo)} onClose={() => setCancelSlot(null)} />
       )}
-      {watchOpen && <WatchSheet fecha={selected} franjas={franjas} onClose={() => setWatchOpen(false)} />}
+      {watchOpen && <WatchSheet fecha={selected} franjas={franjas} initialSlot={watchSlot} onClose={() => setWatchOpen(false)} />}
     </div>
   );
 }

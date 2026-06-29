@@ -23,6 +23,12 @@ export function normalizeYmd(s: string): string {
   return s;
 }
 
+// YYYYMMDD → "DD.MM.YYYY" for display. Leaves anything not 8 digits untouched.
+export function ymdToDisplay(ymd: string): string {
+  const m = /^(\d{4})(\d{2})(\d{2})$/.exec(ymd);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : ymd;
+}
+
 export function weekdayCode(ymd: string): string {
   return WEEKDAYS[ymdToDate(ymd).getDay()];
 }
