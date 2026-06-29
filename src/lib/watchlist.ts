@@ -1,4 +1,5 @@
 import type { Franja } from './types';
+import { dateToYmd } from './dates';
 
 export interface Watch { fecha: string; franjas: string[]; active: boolean }
 
@@ -31,4 +32,14 @@ export function addWatch(w: Watch): void {
 
 export function removeWatch(fecha: string): void {
   saveWatches(loadWatches().filter((x) => x.fecha !== fecha));
+}
+
+// Drop watches whose date has already passed (they can never grab again). Called on app start and
+// when the watch sheet opens, so expired watches clear themselves and the next sync drops them server-side.
+export function pruneExpiredWatches(): Watch[] {
+  const today = dateToYmd(new Date());
+  const all = loadWatches();
+  const kept = all.filter((w) => w.fecha >= today);
+  if (kept.length !== all.length) saveWatches(kept);
+  return kept;
 }

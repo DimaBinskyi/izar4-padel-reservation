@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Franja } from '../lib/types';
-import { expandRange, loadWatches, addWatch, removeWatch, type Watch } from '../lib/watchlist';
+import { expandRange, loadWatches, addWatch, removeWatch, pruneExpiredWatches, type Watch } from '../lib/watchlist';
 import { syncRegistration } from '../lib/pushClient';
 import { ymdToDisplay } from '../lib/dates';
 
@@ -11,7 +11,7 @@ export function WatchSheet({ fecha, franjas, initialSlot = null, onClose }: { fe
   // Pre-select the tapped slot's time when opened from a slot's 🎯 button (else the full day range).
   const [from, setFrom] = useState(initialSlot ?? ordered[0]?.slot ?? '');
   const [to, setTo] = useState(initialSlot ?? ordered[ordered.length - 1]?.slot ?? '');
-  const [watches, setWatches] = useState<Watch[]>(loadWatches());
+  const [watches, setWatches] = useState<Watch[]>(pruneExpiredWatches());   // drop date-passed watches on open
   const [info, setInfo] = useState<Watch | null>(null);   // read-only details of a tapped active watch
   const preview = expandRange(ordered, from, to);
 

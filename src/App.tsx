@@ -6,6 +6,7 @@ import { MyBookingsScreen } from './screens/MyBookingsScreen';
 import { StatsScreen } from './screens/StatsScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { loadProfile, type Profile } from './lib/profile';
+import { pruneExpiredWatches } from './lib/watchlist';
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('slots');
@@ -13,9 +14,14 @@ export default function App() {
   const [slotFocus, setSlotFocus] = useState<{ fecha: string; slot: string } | null>(null);
 
   useEffect(() => {
-    const sync = () => { void import('./lib/syncGrabbed').then((m) => m.pullGrabbed()).catch(() => {}); };
-    sync();
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') sync(); });
+    const onForeground = () => {
+      pruneExpiredWatches();   // drop date-passed watches locally
+      void import('./lib/syncGrabbed').then((m) => m.pullGrabbed())                       // pull auto-grabs (clears grabbed watches)
+        .then(() => import('./lib/pushClient').then((m) => m.syncRegistration()))          // push the cleaned watchlist to the worker
+        .catch(() => {});
+    };
+    onForeground();
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') onForeground(); });
   }, []);
 
   // The Slots tab owns the mandatory first-run profile modal (it blocks the screen until filled).
