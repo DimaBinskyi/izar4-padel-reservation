@@ -70,7 +70,7 @@ export function MyBookingsScreen({ profile, onOpenSlot }: { profile: Profile; on
       {
         title: t('calendar.eventTitle'),
         location: t('calendar.eventLocation'),
-        description: `${res.slot} · ${franja.start}–${franja.end} · ${res.nombre} · ${res.vivienda}`,
+        description: `${franja.start}–${franja.end} · ${res.nombre} · ${res.vivienda}`,
       },
     );
     try {

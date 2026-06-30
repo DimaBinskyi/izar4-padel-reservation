@@ -182,7 +182,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
       {
         title: t('calendar.eventTitle'),
         location: t('calendar.eventLocation'),
-        description: `${f.slot} · ${f.start}–${f.end} · ${profile.nombre} · ${profile.vivienda}`,
+        description: `${f.start}–${f.end} · ${profile.nombre} · ${profile.vivienda}`,
       },
     );
     try {
