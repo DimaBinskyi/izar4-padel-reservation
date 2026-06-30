@@ -171,7 +171,7 @@
   },
   "calendar": {
     "add": "Add to calendar",
-    "added": "Added to calendar ✓",
+    "pickHint": "Pick a calendar in the dialog — it won't add by itself",
     "alreadyAddedConfirm": "You already added this game to your calendar. Add it again?",
     "error": "Couldn't open the calendar. Try again.",
     "cancelReminder": "You added this game to your calendar — delete that event manually.",

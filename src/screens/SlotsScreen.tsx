@@ -187,7 +187,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     );
     try {
       if (addBookingToCalendar(ev, key, () => window.confirm(t('calendar.alreadyAddedConfirm')))) {
-        show(t('calendar.added'), 'success');
+        show(t('calendar.pickHint'), 'warn');
       }
     } catch {
       show(t('calendar.error'), 'warn');

@@ -171,7 +171,7 @@
   },
   "calendar": {
     "add": "Añadir al calendario",
-    "added": "Añadido al calendario ✓",
+    "pickHint": "Elige un calendario en el cuadro — no se añade solo",
     "alreadyAddedConfirm": "Ya añadiste este partido al calendario. ¿Añadirlo de nuevo?",
     "error": "No se pudo abrir el calendario. Inténtalo de nuevo.",
     "cancelReminder": "Añadiste este partido al calendario — elimina el evento manualmente.",
