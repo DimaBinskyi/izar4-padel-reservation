@@ -168,5 +168,14 @@
     "toastFreeSome": "There are free slots in this range — book them. Watching only the busy ones ({{n}}).",
     "toastFreeAll": "All selected slots are free — just book them.",
     "toastHasFree": "Your selection includes free slots — pick only busy ones (free slots are bookable now)."
+  },
+  "calendar": {
+    "add": "Add to calendar",
+    "added": "Added to calendar ✓",
+    "alreadyAddedConfirm": "You already added this game to your calendar. Add it again?",
+    "error": "Couldn't open the calendar. Try again.",
+    "cancelReminder": "You added this game to your calendar — delete that event manually.",
+    "eventTitle": "Pádel 🎾",
+    "eventLocation": "IZAR 4 — Pista de pádel"
   }
 }
