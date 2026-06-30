@@ -18,10 +18,11 @@ interface Props {
   onBook: () => void;     // for free slots
   onCancel: () => void;   // for own slots
   onWatch: () => void;    // for busy slots that aren't mine
+  onAddCalendar?: () => void;  // add this own booking to the phone calendar
   highlight?: boolean;    // briefly blink + scroll into view (when jumped to from My bookings)
 }
 
-export function SlotRow({ slot, mine, canBook, highlight, onBook, onCancel, onWatch }: Props) {
+export function SlotRow({ slot, mine, canBook, highlight, onBook, onCancel, onWatch, onAddCalendar }: Props) {
   const { t } = useTranslation();
   const badgeKey = mine && slot.status === 'ocupado' ? 'mine' : slot.status;
   const c = BADGE[badgeKey];
@@ -45,14 +46,18 @@ export function SlotRow({ slot, mine, canBook, highlight, onBook, onCancel, onWa
           </>
         )}
       </div>
-      <div style={{ width: 34 }}>
+      <div style={{ width: 74, display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
         {slot.status === 'libre' && canBook && (
           <button onClick={onBook} aria-label="book"
             style={{ width: 34, height: 34, borderRadius: 10, border: 'none', background: '#1d4ed8', color: '#fff', fontSize: 17, fontWeight: 700 }}>+</button>
         )}
         {slot.status === 'ocupado' && mine && !slot.past && (
-          <button onClick={onCancel} aria-label="cancel"
-            style={{ width: 34, height: 34, borderRadius: 10, border: 'none', background: '#3a1620', color: '#ff8a8a', fontSize: 17, fontWeight: 700 }}>×</button>
+          <>
+            <button onClick={onAddCalendar} aria-label="add to calendar"
+              style={{ width: 32, height: 34, borderRadius: 10, border: 'none', background: '#16202e', color: '#cfe0f5', fontSize: 15 }}>📅</button>
+            <button onClick={onCancel} aria-label="cancel"
+              style={{ width: 32, height: 34, borderRadius: 10, border: 'none', background: '#3a1620', color: '#ff8a8a', fontSize: 17, fontWeight: 700 }}>×</button>
+          </>
         )}
         {slot.status === 'ocupado' && !mine && !slot.past && (
           <button onClick={onWatch} aria-label="watch"
