@@ -7,6 +7,7 @@ import { getDeviceSecret } from '../lib/deviceSecret';
 import { applyOverrides } from '../lib/overrides';
 import { isMine } from '../lib/mine';
 import { dateToYmd, ymdToDate, addDays, addMonths, ymdToISO, isoToYmd } from '../lib/dates';
+import { pruneCalendarEvents } from '../lib/calendarEvents';
 import { PullToRefresh } from '../components/PullToRefresh';
 import type { Profile } from '../lib/profile';
 
@@ -30,7 +31,9 @@ export function StatsScreen({ profile }: { profile?: Profile | null }) {
   // currently booked (past + upcoming); the local log adds cancelled history + the origin (app/auto). We save
   // ONLY this user's bookings (isMine) — never the whole community's. Reads the fast snapshot (no izar4 spam).
   const loadLog = useCallback(async () => {
-    try { await pruneOldBookings(addMonths(today, -TTL_MONTHS)); } catch { /* */ }   // TTL
+    const ttlCutoff = addMonths(today, -TTL_MONTHS);
+    try { await pruneOldBookings(ttlCutoff); } catch { /* */ }   // TTL
+    try { pruneCalendarEvents(ttlCutoff); } catch { /* */ }       // TTL (calendar flags)
     let local: BookingRecord[] = [];
     try { local = await listBookings(); } catch { /* IndexedDB unavailable */ }
     if (!profile) { setLog(local); return; }
