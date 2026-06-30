@@ -168,5 +168,14 @@
     "toastFreeSome": "Hay turnos libres en este rango — resérvalos. Vigilo solo los ocupados ({{n}}).",
     "toastFreeAll": "Todos los turnos seleccionados están libres — resérvalos.",
     "toastHasFree": "Tu selección incluye turnos libres — elige solo los ocupados (los libres se reservan ya)."
+  },
+  "calendar": {
+    "add": "Añadir al calendario",
+    "added": "Añadido al calendario ✓",
+    "alreadyAddedConfirm": "Ya añadiste este partido al calendario. ¿Añadirlo de nuevo?",
+    "error": "No se pudo abrir el calendario. Inténtalo de nuevo.",
+    "cancelReminder": "Añadiste este partido al calendario — elimina el evento manualmente.",
+    "eventTitle": "Pádel 🎾",
+    "eventLocation": "IZAR 4 — Pista de pádel"
   }
 }

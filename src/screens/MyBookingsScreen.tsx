@@ -3,7 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { CancelModal } from '../components/CancelModal';
 import { fetchAllReservations, fetchFranjas, cancelReservation } from '../lib/izar4Client';
 import { getDeviceSecret } from '../lib/deviceSecret';
-import { listBookings, markCancelled, type BookingRecord } from '../lib/bookingsDb';
+import { listBookings, markCancelled, bookingKey, type BookingRecord } from '../lib/bookingsDb';
+import { buildBookingEvent } from '../lib/ics';
+import { addBookingToCalendar } from '../lib/calendar';
+import { hasCalendarEvent, clearCalendarEvent } from '../lib/calendarEvents';
+import { Toast, useToast } from '../components/Toast';
 import { addRecentAction } from '../lib/recentActions';
 import { applyOverrides, addOverride } from '../lib/overrides';
 import { syncRegistration } from '../lib/pushClient';
@@ -15,6 +19,7 @@ import type { Franja, Reservation, SlotView } from '../lib/types';
 
 export function MyBookingsScreen({ profile, onOpenSlot }: { profile: Profile; onOpenSlot: (fecha: string, slot: string) => void }) {
   const { t, i18n } = useTranslation();
+  const { toast, show } = useToast();
   const today = dateToYmd(new Date());
   const secret = getDeviceSecret();
   const [rows, setRows] = useState<{ res: Reservation; franja: Franja; origin: string }[] | null>(null);
@@ -57,6 +62,26 @@ export function MyBookingsScreen({ profile, onOpenSlot }: { profile: Profile; on
     };
   }, [load]);
 
+  function addToCalendar(res: Reservation, franja: Franja) {
+    if (franja.start === '--:--') { show(t('calendar.error'), 'warn'); return; }
+    const key = bookingKey(res.fecha, res.slot);
+    const ev = buildBookingEvent(
+      { fecha: res.fecha, slot: res.slot, start: franja.start, end: franja.end },
+      {
+        title: t('calendar.eventTitle'),
+        location: t('calendar.eventLocation'),
+        description: `${res.slot} · ${franja.start}–${franja.end} · ${res.nombre} · ${res.vivienda}`,
+      },
+    );
+    try {
+      if (addBookingToCalendar(ev, key, () => window.confirm(t('calendar.alreadyAddedConfirm')))) {
+        show(t('calendar.added'), 'success');
+      }
+    } catch {
+      show(t('calendar.error'), 'warn');
+    }
+  }
+
   async function doCancel(res: Reservation, codigo: string): Promise<boolean> {
     const r = await cancelReservation(secret, res.id, codigo);
     if (!r.ok) return false;
@@ -65,6 +90,11 @@ export function MyBookingsScreen({ profile, onOpenSlot }: { profile: Profile; on
     addOverride({ key: `${res.fecha}|${res.slot}`, type: 'remove' });
     void syncRegistration();
     await load(true);            // direct live re-read from izar4 + feed the Worker
+    const calKey = bookingKey(res.fecha, res.slot);
+    if (hasCalendarEvent(calKey)) {
+      show(t('calendar.cancelReminder'), 'warn');
+      clearCalendarEvent(calKey);
+    }
     setCancelRow(null);
     return true;
   }
@@ -85,12 +115,17 @@ export function MyBookingsScreen({ profile, onOpenSlot }: { profile: Profile; on
         {rows?.map(({ res, franja, origin }) => {
           const d = ymdToDate(res.fecha);
           const dateStr = new Intl.DateTimeFormat(i18n.language, { weekday: 'short', day: 'numeric', month: 'short' }).format(d);
+          const startedToday = res.fecha === today && franja.start !== '--:--' && franja.start <= new Date().toTimeString().slice(0, 5);
           return (
             <div key={`${res.fecha}|${res.slot}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 8px', borderBottom: '1px solid #141d2a' }}>
               <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => onOpenSlot(res.fecha, res.slot)}>
                 <div style={{ fontSize: 13.5, fontWeight: 700, color: '#eaf2fc' }}>{dateStr} · {franja.start}–{franja.end}</div>
                 <div style={{ fontSize: 10.5, color: '#8aa0bd', marginTop: 4 }}>{originLabel(origin)}</div>
               </div>
+              {!startedToday && (
+                <button onClick={() => addToCalendar(res, franja)} aria-label={t('calendar.add')}
+                  style={{ background: '#16202e', color: '#cfe0f5', border: 'none', borderRadius: 10, padding: '8px 11px', fontSize: 15, fontWeight: 700 }}>📅</button>
+              )}
               <button onClick={() => setCancelRow({ res, franja })}
                 style={{ background: '#3a1620', color: '#ff8a8a', border: 'none', borderRadius: 10, padding: '8px 11px', fontSize: 12.5, fontWeight: 700 }}>{t('mybookings.cancel')}</button>
             </div>
@@ -104,6 +139,7 @@ export function MyBookingsScreen({ profile, onOpenSlot }: { profile: Profile; on
           fecha={cancelRow.res.fecha} profile={profile}
           onConfirm={(codigo) => doCancel(cancelRow.res, codigo)} onClose={() => setCancelRow(null)} />
       )}
+      <Toast toast={toast} />
     </div>
   );
 }
