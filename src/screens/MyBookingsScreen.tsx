@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CancelModal } from '../components/CancelModal';
 import { fetchAllReservations, fetchFranjas, cancelReservation } from '../lib/izar4Client';
@@ -26,8 +26,12 @@ export function MyBookingsScreen({ profile, onOpenSlot }: { profile: Profile; on
   const [error, setError] = useState<string | null>(null);
   const [cancelRow, setCancelRow] = useState<{ res: Reservation; franja: Franja } | null>(null);
 
+  // Keep the last good list on a background-refresh failure: never blank `rows` mid-session. Adding a
+  // game to the calendar briefly backgrounds the PWA, which fires a focus refresh — if that refresh
+  // errors we must NOT wipe the list. The error banner only shows before the FIRST successful load
+  // (when there is nothing to display yet); after that, a failed refresh silently keeps the old rows.
+  const loadedRef = useRef(false);
   const load = useCallback(async (live = false) => {
-    if (!live) { setRows(null); setError(null); }   // only show the skeleton on the instant (snapshot) pass
     try {
       const [allRaw, franjas, log] = await Promise.all([fetchAllReservations(secret, live), fetchFranjas(secret), listBookings()]);
       const all = applyOverrides(allRaw.reservas);
@@ -43,8 +47,10 @@ export function MyBookingsScreen({ profile, onOpenSlot }: { profile: Profile; on
           return { res, franja, origin };
         });
       setRows(mine);
+      loadedRef.current = true;
+      setError(null);
     } catch {
-      if (!live) setError(t('slots.error'));
+      if (!loadedRef.current) setError(t('slots.error'));   // only before the first successful load
     }
   }, [secret, today, profile, t]);
 

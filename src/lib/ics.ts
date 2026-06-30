@@ -76,28 +76,24 @@ export function buildIcs(ev: CalEvent): string {
   return lines.join('\r\n') + '\r\n';
 }
 
-// iOS (Safari or standalone PWA) ignores the <a download> attribute; opening the blob URL
-// makes iOS show its native "Add to Calendar" sheet. Android/desktop honor the download.
-// Heuristic: navigator.platform is deprecated and can report 'MacIntel' on Apple Silicon, so
-// we also require touch points to tell iPadOS apart from a desktop Mac. Good enough here.
-function isIos(): boolean {
-  const ua = navigator.userAgent;
-  return /ipad|iphone|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-}
-
-// Side effect: trigger the OS "add to calendar" flow. Not unit-tested (DOM/navigator).
+// Hand the event to the OS calendar via the Worker's /ics endpoint, which serves it as a
+// text/calendar ATTACHMENT. The browser hands the file to the calendar app WITHOUT navigating the
+// page, so the installed PWA isn't torn down — a plain location change to a blob: URL did exactly
+// that on iOS standalone (it replaced the running app and wiped in-flight state). Not unit-tested (DOM).
 export function downloadIcs(ev: CalEvent): void {
-  const blob = new Blob([buildIcs(ev)], { type: 'text/calendar;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  if (isIos()) {
-    window.location.assign(url);
-  } else {
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `padel-${ev.fecha}.ics`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  }
-  window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  const q = new URLSearchParams({
+    t: ev.title,
+    d: ev.fecha,
+    s: ev.start,
+    e: ev.end,
+    loc: ev.location,
+    desc: ev.description,
+    uid: ev.uid,
+  });
+  const a = document.createElement('a');
+  a.href = `/ics?${q.toString()}`;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }

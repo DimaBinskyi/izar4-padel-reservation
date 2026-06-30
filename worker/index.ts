@@ -1,6 +1,7 @@
 import { diffSnapshots, chooseGrab, isWatchExpired, countWeekKeys, slotStartPassed, type Watch, type FranjaMap } from './logic';
 import { sendPush, type PushSub, type Vapid } from './push';
 import { buildPushText, type PushParams } from './pushText';
+import { buildIcs } from '../src/lib/ics';
 
 export interface Env {
   DEVICE_SECRET: string;
@@ -32,6 +33,28 @@ interface DeviceRecord {
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
+
+    // Public (no auth) .ics endpoint for the "add to calendar" feature. Builds a calendar event
+    // purely from query params (no KV/izar4 access → nothing sensitive to expose) and serves it as a
+    // text/calendar ATTACHMENT so the OS hands it to the Calendar app without navigating away from
+    // the installed PWA. Auth can't apply here: the client reaches it via a plain link, not fetch.
+    if (url.pathname === '/ics' && req.method === 'GET') {
+      const p = url.searchParams;
+      const ics = buildIcs({
+        title: p.get('t') ?? 'Pádel',
+        fecha: p.get('d') ?? '',
+        start: p.get('s') ?? '',
+        end: p.get('e') ?? '',
+        location: p.get('loc') ?? '',
+        description: p.get('desc') ?? '',
+        uid: p.get('uid') ?? '',
+      });
+      return new Response(ics, { status: 200, headers: {
+        'content-type': 'text/calendar; charset=utf-8',
+        'content-disposition': 'attachment; filename="padel.ics"',
+        'cache-control': 'no-store',
+      } });
+    }
 
     if (url.pathname.startsWith('/api/')) {
       if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
