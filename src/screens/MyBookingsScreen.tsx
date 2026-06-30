@@ -6,8 +6,9 @@ import { getDeviceSecret } from '../lib/deviceSecret';
 import { listBookings, markCancelled, bookingKey, type BookingRecord } from '../lib/bookingsDb';
 import { buildBookingEvent } from '../lib/ics';
 import { addBookingToCalendar } from '../lib/calendar';
-import { hasCalendarEvent, clearCalendarEvent } from '../lib/calendarEvents';
+import { hasCalendarEvent, clearCalendarEvent, isCalendarHintDismissed, dismissCalendarHint } from '../lib/calendarEvents';
 import { Toast, useToast } from '../components/Toast';
+import { CalendarAddModal } from '../components/CalendarAddModal';
 import { addRecentAction } from '../lib/recentActions';
 import { applyOverrides, addOverride } from '../lib/overrides';
 import { syncRegistration } from '../lib/pushClient';
@@ -25,6 +26,7 @@ export function MyBookingsScreen({ profile, onOpenSlot }: { profile: Profile; on
   const [rows, setRows] = useState<{ res: Reservation; franja: Franja; origin: string }[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cancelRow, setCancelRow] = useState<{ res: Reservation; franja: Franja } | null>(null);
+  const [pendingCal, setPendingCal] = useState<{ res: Reservation; franja: Franja } | null>(null);   // awaiting the add-to-calendar confirm modal
 
   // Keep the last good list on a background-refresh failure: never blank `rows` mid-session. Adding a
   // game to the calendar briefly backgrounds the PWA, which fires a focus refresh — if that refresh
@@ -68,8 +70,14 @@ export function MyBookingsScreen({ profile, onOpenSlot }: { profile: Profile; on
     };
   }, [load]);
 
-  function addToCalendar(res: Reservation, franja: Franja) {
+  // Tap → show the explainer modal first (unless dismissed), then hand the .ics to the OS.
+  function requestAddToCalendar(res: Reservation, franja: Franja) {
     if (franja.start === '--:--') { show(t('calendar.error'), 'warn'); return; }
+    if (isCalendarHintDismissed()) doAddToCalendar(res, franja);
+    else setPendingCal({ res, franja });
+  }
+
+  function doAddToCalendar(res: Reservation, franja: Franja) {
     const key = bookingKey(res.fecha, res.slot);
     const ev = buildBookingEvent(
       { fecha: res.fecha, slot: res.slot, start: franja.start, end: franja.end },
@@ -80,9 +88,7 @@ export function MyBookingsScreen({ profile, onOpenSlot }: { profile: Profile; on
       },
     );
     try {
-      if (addBookingToCalendar(ev, key, () => window.confirm(t('calendar.alreadyAddedConfirm')))) {
-        show(t('calendar.pickHint'), 'warn');
-      }
+      addBookingToCalendar(ev, key, () => window.confirm(t('calendar.alreadyAddedConfirm')));
     } catch {
       show(t('calendar.error'), 'warn');
     }
@@ -129,7 +135,7 @@ export function MyBookingsScreen({ profile, onOpenSlot }: { profile: Profile; on
                 <div style={{ fontSize: 10.5, color: '#8aa0bd', marginTop: 4 }}>{originLabel(origin)}</div>
               </div>
               {!startedToday && (
-                <button onClick={() => addToCalendar(res, franja)} aria-label={t('calendar.add')}
+                <button onClick={() => requestAddToCalendar(res, franja)} aria-label={t('calendar.add')}
                   style={{ background: '#16202e', color: '#cfe0f5', border: 'none', borderRadius: 10, padding: '8px 11px', fontSize: 15, fontWeight: 700 }}>📅</button>
               )}
               <button onClick={() => setCancelRow({ res, franja })}
@@ -144,6 +150,11 @@ export function MyBookingsScreen({ profile, onOpenSlot }: { profile: Profile; on
           slot={{ franja: cancelRow.franja, status: 'ocupado', reservation: cancelRow.res } as SlotView}
           fecha={cancelRow.res.fecha} profile={profile}
           onConfirm={(codigo) => doCancel(cancelRow.res, codigo)} onClose={() => setCancelRow(null)} />
+      )}
+      {pendingCal && (
+        <CalendarAddModal
+          onClose={() => setPendingCal(null)}
+          onContinue={(dontShowAgain) => { if (dontShowAgain) dismissCalendarHint(); if (!pendingCal) return; const pc = pendingCal; setPendingCal(null); doAddToCalendar(pc.res, pc.franja); }} />
       )}
       <Toast toast={toast} />
     </div>

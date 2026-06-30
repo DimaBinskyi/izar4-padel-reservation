@@ -21,8 +21,9 @@ import { countDay, weeklyRemaining, countWeek } from '../lib/limits';
 import { recordBooking, markCancelled, bookingKey } from '../lib/bookingsDb';
 import { buildBookingEvent } from '../lib/ics';
 import { addBookingToCalendar } from '../lib/calendar';
-import { hasCalendarEvent, clearCalendarEvent } from '../lib/calendarEvents';
+import { hasCalendarEvent, clearCalendarEvent, isCalendarHintDismissed, dismissCalendarHint } from '../lib/calendarEvents';
 import { Toast, useToast } from '../components/Toast';
+import { CalendarAddModal } from '../components/CalendarAddModal';
 import { addRecentAction } from '../lib/recentActions';
 import { applyOverrides, addOverride } from '../lib/overrides';
 import { syncRegistration } from '../lib/pushClient';
@@ -53,6 +54,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
   const [isFresh, setIsFresh] = useState(false);         // shown data was pulled live (vs the snapshot/cache)
   const [snapshotTs, setSnapshotTs] = useState(0);       // when the shown snapshot was made (ms epoch)
   const loadSeq = useRef(0);                       // drop out-of-order responses (rapid day taps / refreshes)
+  const loadedRef = useRef(false);                 // true after the first successful load (gates the error screen)
   const ready = franjas.length > 0;   // first load finished → real data to show
 
   const [profile, setProfile] = useState<Profile | null>(loadProfile());
@@ -62,6 +64,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
   const [watchOpen, setWatchOpen] = useState(false);
   const [watchSlot, setWatchSlot] = useState<string | null>(null);   // slot to pre-select in the watch sheet (null = full day)
   const [highlightSlot, setHighlightSlot] = useState<string | null>(null);
+  const [pendingCal, setPendingCal] = useState<SlotView | null>(null);   // slot awaiting the add-to-calendar confirm modal
 
   const secret = getDeviceSecret();
   const needProfile = !isProfileComplete(profile);
@@ -86,7 +89,10 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
       ]);
       if (seq !== loadSeq.current) return;            // a newer load started → drop this stale result
       setFranjas(f); setWeekdayBlocks(wb); setAllRes(applyOverrides(allRaw.reservas)); setDayBlocks(db); setSnapshotTs(allRaw.ts);
-    } catch { if (seq === loadSeq.current) setError(t('slots.error')); }
+      loadedRef.current = true;
+      // Keep the last good slots on a background-refresh failure (e.g. the focus refresh fired after the
+      // OS calendar sheet closed); only show the error screen before the first successful load.
+    } catch { if (seq === loadSeq.current && !loadedRef.current) setError(t('slots.error')); }
   }, [secret, t]);
 
   // Live refresh: fetch DIRECTLY from izar4 (the user's fast IP — bypasses the WAF-throttled Worker)
@@ -173,7 +179,14 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     return true;
   }
 
-  function addToCalendar(slot: SlotView) {
+  // Tap → show the explainer modal first (unless dismissed), then hand the .ics to the OS.
+  function requestAddToCalendar(slot: SlotView) {
+    if (!profile) return;
+    if (isCalendarHintDismissed()) doAddToCalendar(slot);
+    else setPendingCal(slot);
+  }
+
+  function doAddToCalendar(slot: SlotView) {
     if (!profile) return;
     const f = slot.franja;
     const key = bookingKey(selected, f.slot);
@@ -186,9 +199,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
       },
     );
     try {
-      if (addBookingToCalendar(ev, key, () => window.confirm(t('calendar.alreadyAddedConfirm')))) {
-        show(t('calendar.pickHint'), 'warn');
-      }
+      addBookingToCalendar(ev, key, () => window.confirm(t('calendar.alreadyAddedConfirm')));
     } catch {
       show(t('calendar.error'), 'warn');
     }
@@ -252,7 +263,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
             canBook={!beyondHorizon}
             highlight={highlightSlot === s.franja.slot}
             onBook={() => tryBook(s)} onCancel={() => setCancelSlot(s)} onWatch={() => { setWatchSlot(s.franja.slot); setWatchOpen(true); }}
-            onAddCalendar={() => addToCalendar(s)} />
+            onAddCalendar={() => requestAddToCalendar(s)} />
         ))}
       </div>
       </PullToRefresh>
@@ -272,6 +283,11 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
           onConfirm={(codigo) => doCancel(cancelSlot, codigo)} onClose={() => setCancelSlot(null)} />
       )}
       {watchOpen && <WatchSheet fecha={selected} franjas={franjas} reservations={allRes} vivienda={profile?.vivienda ?? ''} initialSlot={watchSlot} onClose={() => setWatchOpen(false)} />}
+      {pendingCal && (
+        <CalendarAddModal
+          onClose={() => setPendingCal(null)}
+          onContinue={(dontShowAgain) => { if (dontShowAgain) dismissCalendarHint(); if (!pendingCal) return; const s = pendingCal; setPendingCal(null); doAddToCalendar(s); }} />
+      )}
       <Toast toast={toast} />
     </div>
   );

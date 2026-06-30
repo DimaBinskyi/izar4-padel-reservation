@@ -35,3 +35,13 @@ export function clearCalendarEvent(key: string): void {
 export function pruneCalendarEvents(beforeYmd: string): void {
   save(load().filter((k) => k.split('|')[0] >= beforeYmd));
 }
+
+// One-time "how add-to-calendar works" hint (the OS picker can't be bypassed). The user can
+// permanently dismiss it via the "don't show again" checkbox in the calendar-add modal.
+const HINT_KEY = 'padel_calendar_hint_dismissed';
+export function isCalendarHintDismissed(): boolean {
+  return localStorage.getItem(HINT_KEY) === '1';
+}
+export function dismissCalendarHint(): void {
+  localStorage.setItem(HINT_KEY, '1');
+}
