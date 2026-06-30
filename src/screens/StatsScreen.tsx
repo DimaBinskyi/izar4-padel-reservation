@@ -88,10 +88,12 @@ export function StatsScreen({ profile }: { profile?: Profile | null }) {
   ];
 
   // Long-press → enter multi-select; tap toggles; the synthesized click after a long-press is ignored.
+  // ONLY cancelled bookings are deletable: played/upcoming come from the izar4 snapshot and would just
+  // re-appear on the next pull, so they can't be selected at all.
   const pressTimer = useRef<number | null>(null);
   const longFired = useRef(false);
-  function pressStart(key: string) {
-    if (pressTimer.current) return;
+  function pressStart(key: string, deletable: boolean) {
+    if (!deletable || pressTimer.current) return;
     longFired.current = false;
     pressTimer.current = window.setTimeout(() => {
       longFired.current = true; pressTimer.current = null;
@@ -99,9 +101,9 @@ export function StatsScreen({ profile }: { profile?: Profile | null }) {
     }, 450);
   }
   function pressEnd() { if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; } }
-  function rowClick(key: string) {
+  function rowClick(key: string, deletable: boolean) {
     if (longFired.current) { longFired.current = false; return; }
-    if (!selecting) return;
+    if (!selecting || !deletable) return;
     setSelected((s) => { const n = new Set(s); if (n.has(key)) n.delete(key); else n.add(key); if (n.size === 0) setSelecting(false); return n; });
   }
   function exitSelect() { setSelecting(false); setSelected(new Set()); }
@@ -181,13 +183,13 @@ export function StatsScreen({ profile }: { profile?: Profile | null }) {
           const upcoming = !cancelled && x.fecha >= today;
           const auto = !cancelled && !upcoming && x.origin === 'auto';
           const color = cancelled ? '#ff9b9b' : upcoming ? '#f2c14e' : auto ? '#86b7ff' : '#7ee2a8';
-          const label = cancelled ? t('stats.cancelled') : upcoming ? t('stats.upcoming') : auto ? t('mybookings.originAuto') : t('stats.played');
+          const label = cancelled ? t('stats.statusCancelled') : upcoming ? t('stats.upcoming') : auto ? t('mybookings.originAuto') : t('stats.played');
           return (
             <div key={x.key}
-              onPointerDown={() => pressStart(x.key)} onPointerUp={pressEnd} onPointerLeave={pressEnd} onPointerCancel={pressEnd}
-              onClick={() => rowClick(x.key)} onContextMenu={(e) => e.preventDefault()}
-              style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 2px', borderBottom: '1px solid #141d2a', fontSize: 12, cursor: selecting ? 'pointer' : 'default', background: isSel ? '#10203a' : 'transparent', borderRadius: isSel ? 8 : 0, userSelect: 'none', WebkitUserSelect: 'none' }}>
-              {selecting && (
+              onPointerDown={() => pressStart(x.key, cancelled)} onPointerUp={pressEnd} onPointerLeave={pressEnd} onPointerCancel={pressEnd}
+              onClick={() => rowClick(x.key, cancelled)} onContextMenu={(e) => e.preventDefault()}
+              style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 2px', borderBottom: '1px solid #141d2a', fontSize: 12, cursor: selecting && cancelled ? 'pointer' : 'default', background: isSel ? '#10203a' : 'transparent', borderRadius: isSel ? 8 : 0, opacity: selecting && !cancelled ? 0.45 : 1, userSelect: 'none', WebkitUserSelect: 'none' }}>
+              {selecting && cancelled && (
                 <span style={{ width: 18, height: 18, flex: '0 0 auto', borderRadius: 5, border: '1.5px solid ' + (isSel ? '#1d4ed8' : '#3a4a60'), background: isSel ? '#1d4ed8' : 'transparent', color: '#fff', textAlign: 'center', lineHeight: '16px', fontSize: 12 }}>{isSel ? '✓' : ''}</span>
               )}
               <span style={{ width: 96, color: '#cfe0f5' }}>{ds}</span>

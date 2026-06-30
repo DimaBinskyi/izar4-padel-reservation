@@ -94,6 +94,7 @@
     "bookings": "bookings",
     "played": "played",
     "cancelled": "cancelled",
+    "statusCancelled": "Cancelled",
     "upcoming": "upcoming",
     "favourite": "Favourite slot",
     "autoGrabbed": "Auto-grabbed",
@@ -108,7 +109,7 @@
     "deleteN": "Delete ({{n}})",
     "deleteTitle": "Delete records?",
     "deleteBody": "Delete {{n}} from local stats? This does not cancel the izar4 bookings.",
-    "selectHint": "Long-press a row to select and delete"
+    "selectHint": "Long-press a cancelled booking to delete"
   },
   "settings": {
     "title": "Settings",

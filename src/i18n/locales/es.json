@@ -94,6 +94,7 @@
     "bookings": "reservas",
     "played": "jugadas",
     "cancelled": "canceladas",
+    "statusCancelled": "Cancelada",
     "upcoming": "próximas",
     "favourite": "Turno favorito",
     "autoGrabbed": "Capturadas auto",
@@ -108,7 +109,7 @@
     "deleteN": "Eliminar ({{n}})",
     "deleteTitle": "¿Eliminar registros?",
     "deleteBody": "¿Eliminar {{n}} de las estadísticas locales? No cancela las reservas en izar4.",
-    "selectHint": "Mantén pulsado para seleccionar y eliminar"
+    "selectHint": "Mantén pulsada una reserva cancelada para eliminar"
   },
   "settings": {
     "title": "Ajustes",
