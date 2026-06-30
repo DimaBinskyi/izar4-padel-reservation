@@ -53,7 +53,7 @@ export function SlotRow({ slot, mine, canBook, highlight, onBook, onCancel, onWa
         )}
         {slot.status === 'ocupado' && mine && !slot.past && (
           <>
-            <button onClick={onAddCalendar} aria-label="add to calendar"
+            <button onClick={onAddCalendar} aria-label={t('calendar.add')}
               style={{ width: 32, height: 34, borderRadius: 10, border: 'none', background: '#16202e', color: '#cfe0f5', fontSize: 15 }}>📅</button>
             <button onClick={onCancel} aria-label="cancel"
               style={{ width: 32, height: 34, borderRadius: 10, border: 'none', background: '#3a1620', color: '#ff8a8a', fontSize: 17, fontWeight: 700 }}>×</button>
