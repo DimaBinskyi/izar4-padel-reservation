@@ -19,6 +19,10 @@ import { loadProfile, saveProfile, isProfileComplete, type Profile } from '../li
 import { isMine } from '../lib/mine';
 import { countDay, weeklyRemaining, countWeek } from '../lib/limits';
 import { recordBooking, markCancelled, bookingKey } from '../lib/bookingsDb';
+import { buildBookingEvent } from '../lib/ics';
+import { addBookingToCalendar } from '../lib/calendar';
+import { hasCalendarEvent, clearCalendarEvent } from '../lib/calendarEvents';
+import { Toast, useToast } from '../components/Toast';
 import { addRecentAction } from '../lib/recentActions';
 import { applyOverrides, addOverride } from '../lib/overrides';
 import { syncRegistration } from '../lib/pushClient';
@@ -32,6 +36,7 @@ interface SlotsScreenProps {
 
 export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps = {}) {
   const { t, i18n } = useTranslation();
+  const { toast, show } = useToast();
   const today = dateToYmd(new Date());
   const [selected, setSelected] = useState(today);
 
@@ -159,8 +164,34 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     addOverride({ key: bookingKey(selected, slot.franja.slot), type: 'remove' });
     void syncRegistration();
     await forceLive();           // direct live re-read from izar4 + feed the Worker
+    const calKey = bookingKey(selected, slot.franja.slot);
+    if (hasCalendarEvent(calKey)) {
+      show(t('calendar.cancelReminder'), 'warn');
+      clearCalendarEvent(calKey);
+    }
     setCancelSlot(null);
     return true;
+  }
+
+  function addToCalendar(slot: SlotView) {
+    if (!profile) return;
+    const f = slot.franja;
+    const key = bookingKey(selected, f.slot);
+    const ev = buildBookingEvent(
+      { fecha: selected, slot: f.slot, start: f.start, end: f.end },
+      {
+        title: t('calendar.eventTitle'),
+        location: t('calendar.eventLocation'),
+        description: `${f.slot} · ${f.start}–${f.end} · ${profile.nombre} · ${profile.vivienda}`,
+      },
+    );
+    try {
+      if (addBookingToCalendar(ev, key, () => window.confirm(t('calendar.alreadyAddedConfirm')))) {
+        show(t('calendar.added'), 'success');
+      }
+    } catch {
+      show(t('calendar.error'), 'warn');
+    }
   }
 
   function tryBook(slot: SlotView) {
@@ -220,7 +251,8 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
             mine={!!(s.reservation && profile && isMine(s.reservation, profile))}
             canBook={!beyondHorizon}
             highlight={highlightSlot === s.franja.slot}
-            onBook={() => tryBook(s)} onCancel={() => setCancelSlot(s)} onWatch={() => { setWatchSlot(s.franja.slot); setWatchOpen(true); }} />
+            onBook={() => tryBook(s)} onCancel={() => setCancelSlot(s)} onWatch={() => { setWatchSlot(s.franja.slot); setWatchOpen(true); }}
+            onAddCalendar={() => addToCalendar(s)} />
         ))}
       </div>
       </PullToRefresh>
@@ -240,6 +272,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
           onConfirm={(codigo) => doCancel(cancelSlot, codigo)} onClose={() => setCancelSlot(null)} />
       )}
       {watchOpen && <WatchSheet fecha={selected} franjas={franjas} reservations={allRes} vivienda={profile?.vivienda ?? ''} initialSlot={watchSlot} onClose={() => setWatchOpen(false)} />}
+      <Toast toast={toast} />
     </div>
   );
 }
