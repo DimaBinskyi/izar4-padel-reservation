@@ -33,7 +33,7 @@ export function SlotRow({ slot, mine, canBook, watched, highlight, onBook, onCan
     if (highlight) ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [highlight]);
   return (
-    <div ref={ref} className={highlight ? 'blink' : undefined} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 8px', borderBottom: '1px solid #141d2a' }}>
+    <div ref={ref} className={highlight ? 'blink' : undefined} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 8px', minHeight: 52, boxSizing: 'border-box', borderBottom: '1px solid #141d2a' }}>
       <div style={{ width: 96, fontSize: 12.5, fontWeight: 600 }}>{slot.franja.start}–{slot.franja.end}</div>
       <div style={{ width: 78 }}>
         <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 20, background: c.bg, color: c.fg }}>
