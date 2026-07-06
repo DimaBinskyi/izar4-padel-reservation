@@ -74,6 +74,12 @@ export function addOrMergeWatch(fecha: string, slots: string[], ordered: string[
   return { status: mergedAny ? 'merged' : 'added', count: mergedSlots.length };
 }
 
+// The watch (if any) that already covers `slot` on `fecha` — i.e. we're already catching this time.
+// Used by the slots screen to swap the "add watch" 🎯 button for the "view watch" 👁 button.
+export function watchCoveringSlot(watches: Watch[], fecha: string, slot: string): Watch | undefined {
+  return watches.find((w) => w.fecha === fecha && w.franjas.includes(slot));
+}
+
 export function removeWatch(fecha: string): void { saveWatches(loadWatches().filter((w) => w.fecha !== fecha)); }            // all watches of a date
 export function removeWatchById(id: string): void { saveWatches(loadWatches().filter((w) => w.id !== id)); }                 // one watch (UI 🗑)
 export function removeWatchBySlot(fecha: string, slot: string): void {                                                       // the watch that covered a grabbed slot

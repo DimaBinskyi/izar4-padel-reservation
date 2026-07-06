@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { loadWatches, addWatch, removeWatch, expandRange, pruneExpiredWatches, saveWatches, addOrMergeWatch, type Watch } from './watchlist';
+import { loadWatches, addWatch, removeWatch, expandRange, pruneExpiredWatches, saveWatches, addOrMergeWatch, watchCoveringSlot, type Watch } from './watchlist';
 import type { Franja } from './types';
 
 const franjas: Franja[] = [
@@ -56,6 +56,18 @@ describe('watchlist', () => {
     expect(r.status).toBe('already');
     expect(loadWatches()).toHaveLength(1);
     expect(loadWatches()[0].franjas).toEqual(['P1-6', 'P1-7', 'P1-8']);
+  });
+
+  it('watchCoveringSlot finds the watch catching a given slot on a given date (or undefined)', () => {
+    const ws: Watch[] = [
+      { id: 'a', fecha: '20990101', franjas: ['P1-6', 'P1-7'], active: true },
+      { id: 'b', fecha: '20990101', franjas: ['P1-9'], active: true },
+      { id: 'c', fecha: '20990102', franjas: ['P1-6'], active: true },
+    ];
+    expect(watchCoveringSlot(ws, '20990101', 'P1-7')?.id).toBe('a');
+    expect(watchCoveringSlot(ws, '20990101', 'P1-9')?.id).toBe('b');
+    expect(watchCoveringSlot(ws, '20990101', 'P1-8')).toBeUndefined();   // gap slot, not watched
+    expect(watchCoveringSlot(ws, '20990103', 'P1-6')).toBeUndefined();   // different date
   });
 
   it('pruneExpiredWatches drops past-date watches and keeps future ones (incl. standing/limit-blocked)', () => {

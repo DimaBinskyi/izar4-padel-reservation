@@ -7,8 +7,8 @@ import { ymdToDisplay } from '../lib/dates';
 import { countWeek } from '../lib/limits';
 import { WEEKLY_LIMIT } from '../config';
 
-export function WatchSheet({ fecha, franjas, reservations, vivienda, initialSlot = null, onClose }: {
-  fecha: string; franjas: Franja[]; reservations: Reservation[]; vivienda: string; initialSlot?: string | null; onClose: () => void;
+export function WatchSheet({ fecha, franjas, reservations, vivienda, initialSlot = null, initialInfoId = null, onClose }: {
+  fecha: string; franjas: Franja[]; reservations: Reservation[]; vivienda: string; initialSlot?: string | null; initialInfoId?: string | null; onClose: () => void;
 }) {
   const { t } = useTranslation();
   const ordered = useMemo(() => [...franjas].sort((a, b) => a.order - b.order), [franjas]);
@@ -16,7 +16,8 @@ export function WatchSheet({ fecha, franjas, reservations, vivienda, initialSlot
   const [from, setFrom] = useState(initialSlot ?? ordered[0]?.slot ?? '');
   const [to, setTo] = useState(initialSlot ?? ordered[ordered.length - 1]?.slot ?? '');
   const [watches, setWatches] = useState<Watch[]>(pruneExpiredWatches());   // drop date-passed watches on open
-  const [info, setInfo] = useState<Watch | null>(null);                     // read-only details of a tapped watch
+  // Opened from a slot's 👁 button → jump straight to that watch's details (falls back to the list if it's gone).
+  const [info, setInfo] = useState<Watch | null>(() => (initialInfoId ? loadWatches().find((w) => w.id === initialInfoId) ?? null : null));
   const [toast, setToast] = useState<{ msg: string; warn: boolean } | null>(null);
   const preview = expandRange(ordered, from, to);
 

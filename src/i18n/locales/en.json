@@ -161,6 +161,7 @@
     "none": "No active watches",
     "remove": "Remove",
     "watchSlot": "Watch",
+    "infoAria": "Watch details",
     "toastAdded": "Watching {{n}} slot(s)",
     "toastAlready": "Already watching these slots",
     "toastMerged": "Merged with your watch — now {{n}} slot(s)",

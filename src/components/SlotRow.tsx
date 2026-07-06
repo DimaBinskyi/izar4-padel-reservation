@@ -14,15 +14,17 @@ const BADGE: Record<string, { bg: string; fg: string }> = {
 interface Props {
   slot: SlotView;
   mine: boolean;          // this occupied slot belongs to the user
-  canBook: boolean;       // false when the date is beyond the booking horizon (view-only)
+  canBook: boolean;       // false → hide the "+" (date beyond the booking horizon, or day/week limit reached)
   onBook: () => void;     // for free slots
   onCancel: () => void;   // for own slots
-  onWatch: () => void;    // for busy slots that aren't mine
+  onWatch: () => void;    // for busy slots that aren't mine — open the "new watch" sheet
+  onWatchInfo: () => void; // for busy slots already covered by a watch — open that watch's details
+  watched?: boolean;      // this busy slot is already covered by an active watch (we're catching it)
   onAddCalendar?: () => void;  // add this own booking to the phone calendar
   highlight?: boolean;    // briefly blink + scroll into view (when jumped to from My bookings)
 }
 
-export function SlotRow({ slot, mine, canBook, highlight, onBook, onCancel, onWatch, onAddCalendar }: Props) {
+export function SlotRow({ slot, mine, canBook, watched, highlight, onBook, onCancel, onWatch, onWatchInfo, onAddCalendar }: Props) {
   const { t } = useTranslation();
   const badgeKey = mine && slot.status === 'ocupado' ? 'mine' : slot.status;
   const c = BADGE[badgeKey];
@@ -60,8 +62,13 @@ export function SlotRow({ slot, mine, canBook, highlight, onBook, onCancel, onWa
           </>
         )}
         {slot.status === 'ocupado' && !mine && !slot.past && (
-          <button onClick={onWatch} aria-label="watch"
-            style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid #4a3a12', background: '#221a06', color: '#f2c14e', fontSize: 15 }}>🎯</button>
+          watched ? (
+            <button onClick={onWatchInfo} aria-label={t('watch.infoAria')}
+              style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid #234e34', background: '#0e2018', color: '#7ee2a8', fontSize: 15 }}>👁</button>
+          ) : (
+            <button onClick={onWatch} aria-label="watch"
+              style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid #4a3a12', background: '#221a06', color: '#f2c14e', fontSize: 15 }}>🎯</button>
+          )
         )}
       </div>
     </div>

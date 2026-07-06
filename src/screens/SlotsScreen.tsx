@@ -26,6 +26,7 @@ import { Toast, useToast } from '../components/Toast';
 import { CalendarAddModal } from '../components/CalendarAddModal';
 import { addRecentAction } from '../lib/recentActions';
 import { applyOverrides, addOverride } from '../lib/overrides';
+import { loadWatches, watchCoveringSlot, type Watch } from '../lib/watchlist';
 import { syncRegistration } from '../lib/pushClient';
 import { WEEKLY_LIMIT, DAILY_LIMIT, BOOKING_HORIZON_DAYS } from '../config';
 import type { Franja, Reservation, SlotView, WeekdayBlockSet } from '../lib/types';
@@ -63,6 +64,8 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
   const [cancelSlot, setCancelSlot] = useState<SlotView | null>(null);
   const [watchOpen, setWatchOpen] = useState(false);
   const [watchSlot, setWatchSlot] = useState<string | null>(null);   // slot to pre-select in the watch sheet (null = full day)
+  const [watchInfoId, setWatchInfoId] = useState<string | null>(null); // open the watch sheet straight to this watch's details (from a slot's 👁)
+  const [watches, setWatches] = useState<Watch[]>(() => loadWatches());  // which slots we're already catching (for the 👁 indicator)
   const [highlightSlot, setHighlightSlot] = useState<string | null>(null);
   const [pendingCal, setPendingCal] = useState<SlotView | null>(null);   // slot awaiting the add-to-calendar confirm modal
 
@@ -116,7 +119,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
 
   // Re-fetch live (direct) when the app/tab regains focus.
   useEffect(() => {
-    const onVisible = () => { if (document.visibilityState === 'visible') void forceLive(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') { void forceLive(); setWatches(loadWatches()); } };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onVisible);
     return () => {
@@ -137,6 +140,12 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
 
   const remaining = profile ? weeklyRemaining(allRes, profile.vivienda, selected, WEEKLY_LIMIT) : WEEKLY_LIMIT;
   const beyondHorizon = selected > addDays(today, BOOKING_HORIZON_DAYS);
+  // Booking a free slot on `selected` is impossible once the day (1/day) or week (3/week) limit is hit —
+  // hide the "+" entirely then, so we never dangle a button that only errors on tap.
+  const limitReached = !!profile && (
+    countDay(allRes, profile.vivienda, selected) >= DAILY_LIMIT ||
+    countWeek(allRes, profile.vivienda, selected) >= WEEKLY_LIMIT
+  );
 
   function goToDate(d: string) {
     setSelected(d);          // instant from in-memory allRes (it already holds every day; no fetch)
@@ -221,7 +230,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
     <div style={{ maxWidth: 420, margin: '0 auto' }}>
       <PullToRefresh onRefresh={pullRefresh}>
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px' }}>
-        <button aria-label="watch" onClick={() => { setWatchSlot(null); setWatchOpen(true); }}
+        <button aria-label="watch" onClick={() => { setWatchSlot(null); setWatchInfoId(null); setWatchOpen(true); }}
           style={{ border: 'none', background: '#16202e', color: '#cfe0f5', borderRadius: 8, padding: '6px 10px', fontSize: 12 }}>🎯 {t('watch.title')}</button>
         <span style={{ fontSize: 17, fontWeight: 700 }}>{t('app.title')}</span>
         <button aria-label="profile" onClick={() => setEditingProfile(true)}
@@ -257,14 +266,20 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
         {!error && ready && dayBlocks[selected] !== undefined && (
           <div style={{ padding: 16, color: '#f2c14e' }}>{dayBlocks[selected] || t('slots.dayBlocked')}</div>
         )}
-        {!error && ready && dayBlocks[selected] === undefined && slots.map((s) => (
+        {!error && ready && dayBlocks[selected] === undefined && slots.map((s) => {
+          const covering = watchCoveringSlot(watches, selected, s.franja.slot);
+          return (
           <SlotRow key={s.franja.slot} slot={s}
             mine={!!(s.reservation && profile && isMine(s.reservation, profile))}
-            canBook={!beyondHorizon}
+            canBook={!beyondHorizon && !limitReached}
+            watched={!!covering}
             highlight={highlightSlot === s.franja.slot}
-            onBook={() => tryBook(s)} onCancel={() => setCancelSlot(s)} onWatch={() => { setWatchSlot(s.franja.slot); setWatchOpen(true); }}
+            onBook={() => tryBook(s)} onCancel={() => setCancelSlot(s)}
+            onWatch={() => { setWatchSlot(s.franja.slot); setWatchInfoId(null); setWatchOpen(true); }}
+            onWatchInfo={() => { setWatchSlot(null); setWatchInfoId(covering?.id ?? null); setWatchOpen(true); }}
             onAddCalendar={() => requestAddToCalendar(s)} />
-        ))}
+          );
+        })}
       </div>
       </PullToRefresh>
 
@@ -282,7 +297,8 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
         <CancelModal slot={cancelSlot} fecha={selected} profile={profile}
           onConfirm={(codigo) => doCancel(cancelSlot, codigo)} onClose={() => setCancelSlot(null)} />
       )}
-      {watchOpen && <WatchSheet fecha={selected} franjas={franjas} reservations={allRes} vivienda={profile?.vivienda ?? ''} initialSlot={watchSlot} onClose={() => setWatchOpen(false)} />}
+      {watchOpen && <WatchSheet fecha={selected} franjas={franjas} reservations={allRes} vivienda={profile?.vivienda ?? ''} initialSlot={watchSlot} initialInfoId={watchInfoId}
+        onClose={() => { setWatchOpen(false); setWatchInfoId(null); setWatches(loadWatches()); }} />}
       {pendingCal && (
         <CalendarAddModal
           onClose={() => setPendingCal(null)}

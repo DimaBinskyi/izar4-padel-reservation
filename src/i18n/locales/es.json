@@ -161,6 +161,7 @@
     "none": "Sin capturas activas",
     "remove": "Quitar",
     "watchSlot": "Capturar",
+    "infoAria": "Detalles de captura",
     "toastAdded": "Vigilando {{n}} turno(s)",
     "toastAlready": "Ya vigilas estos turnos",
     "toastMerged": "Fusionado — ahora {{n}} turno(s)",
