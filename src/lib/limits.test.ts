@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { weekRange, countWeek, countDay, weeklyRemaining } from './limits';
+import { weekRange, countWeek, countDay, weeklyRemaining, limitBlockReason } from './limits';
 import type { Reservation } from './types';
 
 function res(fecha: string, vivienda: string, slot = 'P1-1'): Reservation {
@@ -26,5 +26,18 @@ describe('limits', () => {
     const all = [res('20260622', 'P3-7'), res('20260623', 'P3-7'), res('20260624', 'P3-7')];
     expect(weeklyRemaining(all, 'P3-7', '20260627', 3)).toBe(0);
     expect(weeklyRemaining([], 'P3-7', '20260627', 3)).toBe(3);
+  });
+
+  it('limitBlockReason: day takes priority, then week, else null', () => {
+    // already booked on 27th → 'day' (even if the week is also full)
+    const dayBooked = [res('20260627', 'P3-7', 'P1-1')];
+    expect(limitBlockReason(dayBooked, 'P3-7', '20260627', 1, 3)).toBe('day');
+    // week full (3 on other days of the same week), nothing on the 27th → 'week'
+    const weekFull = [res('20260622', 'P3-7'), res('20260623', 'P3-7'), res('20260624', 'P3-7')];
+    expect(limitBlockReason(weekFull, 'P3-7', '20260627', 1, 3)).toBe('week');
+    // nothing booked → null
+    expect(limitBlockReason([], 'P3-7', '20260627', 1, 3)).toBeNull();
+    // other vivienda's bookings don't block us
+    expect(limitBlockReason([res('20260627', 'P1-1')], 'P3-7', '20260627', 1, 3)).toBeNull();
   });
 });

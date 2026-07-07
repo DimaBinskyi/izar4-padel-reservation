@@ -162,6 +162,8 @@
     "remove": "Quitar",
     "watchSlot": "Capturar",
     "infoAria": "Detalles de captura",
+    "dayLimit": "día completo",
+    "dayLimitInfo": "Ya tienes una reserva ese día — el límite de 1/día está agotado, por eso no capturamos.",
     "toastAdded": "Vigilando {{n}} turno(s)",
     "toastAlready": "Ya vigilas estos turnos",
     "toastMerged": "Fusionado — ahora {{n}} turno(s)",

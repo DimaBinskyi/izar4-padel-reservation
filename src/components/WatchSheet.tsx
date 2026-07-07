@@ -4,8 +4,8 @@ import type { Franja, Reservation } from '../lib/types';
 import { expandRange, loadWatches, addOrMergeWatch, removeWatchById, pruneExpiredWatches, type Watch } from '../lib/watchlist';
 import { syncRegistration } from '../lib/pushClient';
 import { ymdToDisplay } from '../lib/dates';
-import { countWeek } from '../lib/limits';
-import { WEEKLY_LIMIT } from '../config';
+import { limitBlockReason } from '../lib/limits';
+import { WEEKLY_LIMIT, DAILY_LIMIT } from '../config';
 
 export function WatchSheet({ fecha, franjas, reservations, vivienda, initialSlot = null, initialInfoId = null, onClose }: {
   fecha: string; franjas: Franja[]; reservations: Reservation[]; vivienda: string; initialSlot?: string | null; initialInfoId?: string | null; onClose: () => void;
@@ -38,7 +38,9 @@ export function WatchSheet({ fecha, franjas, reservations, vivienda, initialSlot
   function drop(id?: string) { if (id) removeWatchById(id); setWatches(loadWatches()); setInfo(null); void syncRegistration(); }
   const slotTimes = (slots: string[]) => slots.map((s) => { const f = ordered.find((x) => x.slot === s); return f ? `${f.start}–${f.end}` : s; });
   const watchSpan = (w: Watch) => { const fs = ordered.filter((f) => w.franjas.includes(f.slot)); return fs.length ? `${fs[0].start}–${fs[fs.length - 1].end}` : String(w.franjas.length); };
-  const limitBlocked = (w: Watch) => countWeek(reservations, vivienda, w.fecha) >= WEEKLY_LIMIT;
+  // Why a watch can't fire right now: 'day' (already booked that day), 'week' (weekly limit), or null.
+  const blockReason = (w: Watch) => limitBlockReason(reservations, vivienda, w.fecha, DAILY_LIMIT, WEEKLY_LIMIT);
+  const infoBlock = info ? blockReason(info) : null;
 
   const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(2,6,12,.66)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 50 };
   const sheet: React.CSSProperties = { width: '100%', maxWidth: 420, background: '#101826', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: '14px 16px 18px' };
@@ -67,22 +69,25 @@ export function WatchSheet({ fecha, franjas, reservations, vivienda, initialSlot
 
         <div style={{ fontSize: 11, textTransform: 'uppercase', color: '#7e92ad', marginBottom: 8 }}>{t('watch.active')}</div>
         {watches.length === 0 && <div style={{ fontSize: 12, color: '#8aa0bd' }}>{t('watch.none')}</div>}
-        {watches.map((w) => (
+        {watches.map((w) => {
+          const b = blockReason(w);
+          return (
           <div key={w.id ?? w.fecha} onClick={() => setInfo(w)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid #141d2a', cursor: 'pointer' }}>
             <div style={{ flex: 1, fontSize: 12.5 }}>
-              {ymdToDisplay(w.fecha)} · {watchSpan(w)} {w.active ? '🟢' : '⚪'}
-              {limitBlocked(w) && <span style={{ marginLeft: 6, fontSize: 10.5, padding: '2px 7px', borderRadius: 20, background: '#241a00', color: '#f2c14e' }}>⏳ {t('watch.limitWaiting')}</span>}
+              {ymdToDisplay(w.fecha)} · {watchSpan(w)} {b ? '⏸' : w.active ? '🟢' : '⚪'}
+              {b && <span style={{ marginLeft: 6, fontSize: 10.5, padding: '2px 7px', borderRadius: 20, background: '#241a00', color: '#f2c14e' }}>{b === 'day' ? `⏸ ${t('watch.dayLimit')}` : `⏳ ${t('watch.limitWaiting')}`}</span>}
             </div>
             <span style={{ color: '#5a6b82', fontSize: 15 }}>›</span>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {info && (
         <div style={{ ...overlay, zIndex: 60 }} onClick={(e) => { e.stopPropagation(); setInfo(null); }}>
           <div style={sheet} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 12px' }}>{t('watch.title')} · {ymdToDisplay(info.fecha)} {info.active ? '🟢' : '⚪'}</h3>
-            {limitBlocked(info) && <div style={{ fontSize: 12, color: '#f2c14e', marginBottom: 10 }}>⏳ {t('watch.limitWaiting')}</div>}
+            <h3 style={{ margin: '0 0 12px' }}>{t('watch.title')} · {ymdToDisplay(info.fecha)} {infoBlock ? '⏸' : info.active ? '🟢' : '⚪'}</h3>
+            {infoBlock && <div style={{ fontSize: 12, color: '#f2c14e', marginBottom: 10 }}>{infoBlock === 'day' ? `⏸ ${t('watch.dayLimitInfo')}` : `⏳ ${t('watch.limitWaiting')}`}</div>}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
               {slotTimes(info.franjas).map((tm, i) => <span key={i} style={chip}>{tm}</span>)}
             </div>

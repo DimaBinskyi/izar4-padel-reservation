@@ -27,3 +27,13 @@ export function countDay(all: Reservation[], vivienda: string, fechaYmd: string)
 export function weeklyRemaining(all: Reservation[], vivienda: string, fechaYmd: string, limit: number): number {
   return Math.max(0, limit - countWeek(all, vivienda, fechaYmd));
 }
+
+// Why a standing watch can't fire on `fechaYmd` right now: 'day' (already booked that day, 1/day),
+// 'week' (weekly limit hit), or null (nothing blocks it). Day takes priority — it's the more specific
+// reason for that date. Limits are passed in (keeps this module config-free, like weeklyRemaining).
+export type LimitBlock = 'day' | 'week' | null;
+export function limitBlockReason(all: Reservation[], vivienda: string, fechaYmd: string, dailyLimit: number, weeklyLimit: number): LimitBlock {
+  if (countDay(all, vivienda, fechaYmd) >= dailyLimit) return 'day';
+  if (countWeek(all, vivienda, fechaYmd) >= weeklyLimit) return 'week';
+  return null;
+}

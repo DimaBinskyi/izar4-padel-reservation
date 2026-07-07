@@ -273,6 +273,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
             mine={!!(s.reservation && profile && isMine(s.reservation, profile))}
             canBook={!beyondHorizon && !limitReached}
             watched={!!covering}
+            watchPaused={!!covering && limitReached}
             highlight={highlightSlot === s.franja.slot}
             onBook={() => tryBook(s)} onCancel={() => setCancelSlot(s)}
             onWatch={() => { setWatchSlot(s.franja.slot); setWatchInfoId(null); setWatchOpen(true); }}

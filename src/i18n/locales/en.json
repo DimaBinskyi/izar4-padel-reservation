@@ -162,6 +162,8 @@
     "remove": "Remove",
     "watchSlot": "Watch",
     "infoAria": "Watch details",
+    "dayLimit": "day full",
+    "dayLimitInfo": "You already have a booking that day — the 1/day limit is used up, so we're not catching.",
     "toastAdded": "Watching {{n}} slot(s)",
     "toastAlready": "Already watching these slots",
     "toastMerged": "Merged with your watch — now {{n}} slot(s)",
