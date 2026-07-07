@@ -341,19 +341,36 @@ async function runPoll(env: Env, now: Date): Promise<void> {
     for (const watch of rec.watches.filter((w) => w.active)) {
       if (isWatchExpired(watch, franjas, now)) { watch.active = false; changed = true;
         await maybePush(rec, 'watchExpired', { fecha: watch.fecha }, vapid, now); continue; }
+      const myV = rec.profile.vivienda.trim().toUpperCase();
+      const sameDay = reservas.filter((r) => r.vivienda.trim().toUpperCase() === myV && r.fecha === watch.fecha);
       const weekCount = countWeekKeys(reservas, rec.profile.vivienda, watch.fecha);
-      const dayCount = reservas.filter((r) => r.vivienda.trim().toUpperCase() === rec.profile.vivienda.trim().toUpperCase() && r.fecha === watch.fecha).length;
-      const slot = chooseGrab(watch, freed, { franjas, now, weekCount, dayCount, weeklyLimit: 3, dailyLimit: 1 });
+      const dayCount = sameDay.length;
+      // overwrite watch + an existing same-day booking → the swap (book new, cancel old) is limit-neutral.
+      const bypassLimits = !!watch.overwrite && dayCount >= 1;
+      const slot = chooseGrab(watch, freed, { franjas, now, weekCount, dayCount, weeklyLimit: 3, dailyLimit: 1, bypassLimits });
       if (!slot) {
-        // Nothing grabbable this cycle (nothing freed, or at the weekly/daily limit). Keep the watch
-        // ACTIVE — it's a standing intent for a fixed date: if you free room by cancelling before that
-        // date, it grabs next cycle (no manual re-arming). It self-clears only on grab or date expiry.
+        // Nothing grabbable this cycle (nothing freed, or at the weekly/daily limit and not an overwrite
+        // swap). Keep the watch ACTIVE — it's a standing intent for a fixed date: if you free room before
+        // that date it grabs next cycle. It self-clears only on grab or date expiry.
         continue;
       }
       const ok = await createReservation(rec.profile, watch.fecha, slot);
       if (ok.ok) {
         watch.active = false; changed = true;
-        grabbedOut.push({ fecha: watch.fecha, slot, id: ok.id, codigo: rec.profile.codigo, start: franjas[slot]?.start ?? '' });
+        // Overwrite: the new slot is now secured — cancel the same-day booking(s) so we don't exceed 1/day.
+        // Book-before-cancel guarantees we're never left without a booking. Best-effort with the profile
+        // code; if it doesn't match, the client reconciles on pull (see syncGrabbed).
+        let old: Resv | null = null; let oldCancelled = false;
+        if (watch.overwrite) {
+          for (const b of sameDay) {
+            if (b.slot === slot) continue;
+            if (!old) old = b;
+            const done = await cancelReservation(b.id, rec.profile.codigo);
+            if (b === old) oldCancelled = done;
+          }
+        }
+        grabbedOut.push({ fecha: watch.fecha, slot, id: ok.id, codigo: rec.profile.codigo, start: franjas[slot]?.start ?? '',
+          overwrite: !!watch.overwrite, oldId: old?.id, oldSlot: old?.slot, oldCancelled });
         await maybePush(rec, 'grabbed', { time: franjas[slot]?.start ?? '', fecha: watch.fecha, slot }, vapid, now);
       }
     }
@@ -419,6 +436,15 @@ async function createReservation(profile: { nombre: string; vivienda: string; co
   const r = await fetch(`${IZAR4}/wp-json/app/v1/reservar`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const d = (await r.json().catch(() => ({}))) as { ok?: boolean; id?: number };
   return { ok: !!d.ok, id: d.id };
+}
+
+// Cancel a reservation (used by an overwrite grab to drop the old same-day booking after securing the
+// new one). izar4's `codigo` must equal the booking's cancel code; the profile code works for
+// app-created bookings. Returns false on wrong code / failure — the caller keeps the booking.
+async function cancelReservation(idReserva: number, codigo: string): Promise<boolean> {
+  const r = await fetch(`${IZAR4}/wp-json/app/v1/cancelar`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idReserva, codigo }) });
+  const d = (await r.json().catch(() => ({}))) as { ok?: boolean };
+  return !!d.ok;
 }
 
 function dateToYmd(d: Date): string {

@@ -21,11 +21,12 @@ interface Props {
   onWatchInfo: () => void; // for busy slots already covered by a watch — open that watch's details
   watched?: boolean;      // this busy slot is already covered by a watch (we're catching it)
   watchPaused?: boolean;  // the covering watch can't fire now (day/week limit) → show ⏸ instead of 👁
+  watchOverwrite?: boolean; // the covering watch overwrites a same-day booking → show 🔁 (when not paused)
   onAddCalendar?: () => void;  // add this own booking to the phone calendar
   highlight?: boolean;    // briefly blink + scroll into view (when jumped to from My bookings)
 }
 
-export function SlotRow({ slot, mine, canBook, watched, watchPaused, highlight, onBook, onCancel, onWatch, onWatchInfo, onAddCalendar }: Props) {
+export function SlotRow({ slot, mine, canBook, watched, watchPaused, watchOverwrite, highlight, onBook, onCancel, onWatch, onWatchInfo, onAddCalendar }: Props) {
   const { t } = useTranslation();
   const badgeKey = mine && slot.status === 'ocupado' ? 'mine' : slot.status;
   const c = BADGE[badgeKey];
@@ -69,7 +70,7 @@ export function SlotRow({ slot, mine, canBook, watched, watchPaused, highlight, 
                 style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid #4a3a12', background: '#221a06', color: '#f2c14e', fontSize: 15 }}>⏸</button>
             ) : (
               <button onClick={onWatchInfo} aria-label={t('watch.infoAria')}
-                style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid #234e34', background: '#0e2018', color: '#7ee2a8', fontSize: 15 }}>👁</button>
+                style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid #234e34', background: '#0e2018', color: '#7ee2a8', fontSize: 15 }}>{watchOverwrite ? '🔁' : '👁'}</button>
             )
           ) : (
             <button onClick={onWatch} aria-label="watch"

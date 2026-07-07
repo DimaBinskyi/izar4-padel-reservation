@@ -1,4 +1,4 @@
-export interface Watch { fecha: string; franjas: string[]; active: boolean }
+export interface Watch { fecha: string; franjas: string[]; active: boolean; overwrite?: boolean }
 export interface FranjaTime { start: string }
 export type FranjaMap = Record<string, FranjaTime>;
 
@@ -58,12 +58,15 @@ export function countWeekKeys(
 export interface GrabCtx {
   franjas: FranjaMap; now: Date;
   weekCount: number; dayCount: number; weeklyLimit: number; dailyLimit: number;
+  bypassLimits?: boolean;   // overwrite watch with a same-day booking → the swap is limit-neutral
 }
 
 export function chooseGrab(watch: Watch, freedKeys: string[], ctx: GrabCtx): string | null {
   if (!watch.active) return null;
-  if (ctx.dayCount >= ctx.dailyLimit) return null;
-  if (ctx.weekCount >= ctx.weeklyLimit) return null;
+  if (!ctx.bypassLimits) {                        // an overwrite swap (book new + cancel same-day) stays within limits
+    if (ctx.dayCount >= ctx.dailyLimit) return null;
+    if (ctx.weekCount >= ctx.weeklyLimit) return null;
+  }
   const freedSet = new Set(freedKeys);
   for (const slot of watch.franjas) {
     const key = `${watch.fecha}|${slot}`;

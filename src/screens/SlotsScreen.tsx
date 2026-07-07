@@ -141,11 +141,12 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
   const remaining = profile ? weeklyRemaining(allRes, profile.vivienda, selected, WEEKLY_LIMIT) : WEEKLY_LIMIT;
   const beyondHorizon = selected > addDays(today, BOOKING_HORIZON_DAYS);
   // Booking a free slot on `selected` is impossible once the day (1/day) or week (3/week) limit is hit —
-  // hide the "+" entirely then, so we never dangle a button that only errors on tap.
-  const limitReached = !!profile && (
-    countDay(allRes, profile.vivienda, selected) >= DAILY_LIMIT ||
-    countWeek(allRes, profile.vivienda, selected) >= WEEKLY_LIMIT
-  );
+  // hide the "+" entirely then, so we never dangle a button that only errors on tap. Kept split (day vs
+  // week) because an overwrite watch is only truly paused by a pure weekly block (a same-day booking is
+  // what it swaps, so the daily block is what it resolves).
+  const dayBlocked = !!profile && countDay(allRes, profile.vivienda, selected) >= DAILY_LIMIT;
+  const weekBlocked = !!profile && countWeek(allRes, profile.vivienda, selected) >= WEEKLY_LIMIT;
+  const limitReached = dayBlocked || weekBlocked;
 
   function goToDate(d: string) {
     setSelected(d);          // instant from in-memory allRes (it already holds every day; no fetch)
@@ -268,12 +269,17 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
         )}
         {!error && ready && dayBlocks[selected] === undefined && slots.map((s) => {
           const covering = watchCoveringSlot(watches, selected, s.franja.slot);
+          const ow = !!covering?.overwrite;
+          // overwrite watch: paused only by a PURE weekly block (nothing to swap); the daily block is
+          // exactly what the swap resolves. Plain watch: paused by either limit.
+          const paused = !!covering && (ow ? (weekBlocked && !dayBlocked) : limitReached);
           return (
           <SlotRow key={s.franja.slot} slot={s}
             mine={!!(s.reservation && profile && isMine(s.reservation, profile))}
             canBook={!beyondHorizon && !limitReached}
             watched={!!covering}
-            watchPaused={!!covering && limitReached}
+            watchPaused={paused}
+            watchOverwrite={ow}
             highlight={highlightSlot === s.franja.slot}
             onBook={() => tryBook(s)} onCancel={() => setCancelSlot(s)}
             onWatch={() => { setWatchSlot(s.franja.slot); setWatchInfoId(null); setWatchOpen(true); }}

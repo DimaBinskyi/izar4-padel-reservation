@@ -43,6 +43,13 @@ describe('worker logic', () => {
     expect(got).toBeNull();
   });
 
+  it('chooseGrab bypasses the day/week limits for an overwrite swap', () => {
+    const watch = { fecha: '20260628', franjas: ['P1-8'], active: true, overwrite: true };
+    const base = { franjas: { 'P1-8': { start: '19:00' } }, now: new Date(2026,5,28,12,0), weekCount: 3, dayCount: 1, weeklyLimit: 3, dailyLimit: 1 };
+    expect(chooseGrab(watch, ['20260628|P1-8'], { ...base, bypassLimits: true })).toBe('P1-8');   // maxed limits, but the swap is neutral
+    expect(chooseGrab(watch, ['20260628|P1-8'], { ...base, bypassLimits: false })).toBeNull();     // without bypass → blocked
+  });
+
   it('chooseGrab skips a freed slot whose start already passed', () => {
     const watch = { fecha: '20260628', franjas: ['P1-1', 'P1-9'], active: true };
     const got = chooseGrab(watch, ['20260628|P1-1', '20260628|P1-9'], { franjas: { 'P1-1': { start: '09:00' }, 'P1-9': { start: '20:30' } }, now: new Date(2026,5,28,10,0), weekCount: 0, dayCount: 0, weeklyLimit: 3, dailyLimit: 1 });

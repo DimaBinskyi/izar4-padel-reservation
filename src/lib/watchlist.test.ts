@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { loadWatches, addWatch, removeWatch, expandRange, pruneExpiredWatches, saveWatches, addOrMergeWatch, watchCoveringSlot, type Watch } from './watchlist';
+import { loadWatches, addWatch, removeWatch, expandRange, pruneExpiredWatches, saveWatches, addOrMergeWatch, watchCoveringSlot, wouldMergeOverwrite, type Watch } from './watchlist';
 import type { Franja } from './types';
 
 const franjas: Franja[] = [
@@ -68,6 +68,35 @@ describe('watchlist', () => {
     expect(watchCoveringSlot(ws, '20990101', 'P1-9')?.id).toBe('b');
     expect(watchCoveringSlot(ws, '20990101', 'P1-8')).toBeUndefined();   // gap slot, not watched
     expect(watchCoveringSlot(ws, '20990103', 'P1-6')).toBeUndefined();   // different date
+  });
+
+  it('addOrMergeWatch OR-merges the overwrite flag across contiguous ranges (overwrite wins)', () => {
+    expect(addOrMergeWatch('20990101', ['P1-6'], ordered, false).overwrite).toBe(false);
+    const r = addOrMergeWatch('20990101', ['P1-7'], ordered, true);   // adjacent, WITH overwrite
+    expect(r.status).toBe('merged');
+    expect(r.overwrite).toBe(true);
+    expect(loadWatches()[0].overwrite).toBe(true);
+  });
+
+  it('addOrMergeWatch: a plain range merged into an overwrite watch inherits overwrite', () => {
+    addOrMergeWatch('20990101', ['P1-6'], ordered, true);             // overwrite watch
+    const r = addOrMergeWatch('20990101', ['P1-7'], ordered, false);  // adjacent, plain
+    expect(r.overwrite).toBe(true);
+    expect(loadWatches()[0].overwrite).toBe(true);
+  });
+
+  it('addOrMergeWatch upgrades an already-covered watch to overwrite when now requested', () => {
+    addOrMergeWatch('20990101', ['P1-6', 'P1-7'], ordered, false);
+    const r = addOrMergeWatch('20990101', ['P1-7'], ordered, true);   // already covered, but now overwrite
+    expect(r.status).toBe('upgraded');
+    expect(loadWatches()[0].overwrite).toBe(true);
+  });
+
+  it('wouldMergeOverwrite is true only when the range touches an existing overwrite watch', () => {
+    addOrMergeWatch('20990101', ['P1-6'], ordered, true);              // overwrite watch at P1-6
+    expect(wouldMergeOverwrite('20990101', ['P1-7'], ordered)).toBe(true);    // adjacent → merges
+    expect(wouldMergeOverwrite('20990101', ['P1-9'], ordered)).toBe(false);   // gap → separate
+    expect(wouldMergeOverwrite('20990102', ['P1-6'], ordered)).toBe(false);   // other date
   });
 
   it('pruneExpiredWatches drops past-date watches and keeps future ones (incl. standing/limit-blocked)', () => {
