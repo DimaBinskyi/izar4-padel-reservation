@@ -1,4 +1,4 @@
-import { diffSnapshots, chooseGrab, isWatchExpired, countWeekKeys, slotStartPassed, type Watch, type FranjaMap } from './logic';
+import { diffSnapshots, chooseGrab, isWatchExpired, countWeekKeys, slotStartPassed, appendCancelLog, type Watch, type FranjaMap, type CancelLogEntry } from './logic';
 import { sendPush, type PushSub, type Vapid } from './push';
 import { buildPushText, type PushParams } from './pushText';
 import { buildIcs } from '../src/lib/ics';
@@ -104,6 +104,19 @@ export default {
         const raw = await env.KV.get(`grabbed:${deviceId}`);
         if (raw) await env.KV.delete(`grabbed:${deviceId}`);
         return json({ grabbed: raw ? JSON.parse(raw) : [] });
+      }
+
+      // Audit log of freed/cancelled slots (who had it, when it was noticed gone), newest first.
+      // Optional filters: ?fecha=YYYYMMDD, ?slot=P1-2, ?limit=200 (default 200).
+      if (url.pathname === '/api/cancel-log' && req.method === 'GET') {
+        const raw = await env.KV.get('cancel-log');
+        let log = raw ? (JSON.parse(raw) as CancelLogEntry[]) : [];
+        const fecha = url.searchParams.get('fecha');
+        const slot = url.searchParams.get('slot');
+        if (fecha) log = log.filter((e) => e.fecha === fecha);
+        if (slot) log = log.filter((e) => e.slot === slot);
+        const limit = Number(url.searchParams.get('limit') ?? '200');
+        return json({ log: log.slice(0, limit) });
       }
 
       // Client-fed snapshot: the app fetches izar4 directly (from the user's fast IP) and POSTs the
@@ -265,6 +278,16 @@ async function putSnapshot(env: Env, reservas: Resv[]): Promise<void> {
   await env.KV.put('snapshot', JSON.stringify(reservas), { metadata: { ts: Date.now() } });
 }
 
+// Append to the cancel/freed-slot audit log (best-effort — a log failure must not break booking/cancel/poll).
+async function logCancellations(env: Env, entries: CancelLogEntry[], now: number): Promise<void> {
+  if (entries.length === 0) return;
+  try {
+    const raw = await env.KV.get('cancel-log');
+    const existing = raw ? (JSON.parse(raw) as CancelLogEntry[]) : [];
+    await env.KV.put('cancel-log', JSON.stringify(appendCancelLog(existing, entries, now)));
+  } catch { /* best-effort */ }
+}
+
 // Fetch the live list and store it as the snapshot. Returns null (and leaves the snapshot untouched)
 // when izar4 is unavailable, so a failure never blanks the data.
 async function refreshSnapshot(env: Env): Promise<Resv[] | null> {
@@ -289,7 +312,12 @@ async function patchSnapshot(env: Env, isBook: boolean, reqBody: string, resp: a
       snap.push({ id: Number(resp.id ?? 0), fecha, slot, vivienda: String(b.vivienda ?? '').toUpperCase(), nombre: String(b.nombre ?? '') });
     } else {
       const idReserva = Number(b.idReserva);
+      const cancelled = snap.find((r) => r.id === idReserva);
       snap = snap.filter((r) => r.id !== idReserva);
+      if (cancelled) {
+        const now = Date.now();
+        await logCancellations(env, [{ fecha: cancelled.fecha, slot: cancelled.slot, vivienda: cancelled.vivienda, nombre: cancelled.nombre, ts: now, source: 'app' }], now);
+      }
     }
     await putSnapshot(env, snap);
   } catch { /* best-effort */ }
@@ -316,6 +344,17 @@ async function runPoll(env: Env, now: Date): Promise<void> {
   const { freed } = diffSnapshots(prevKeys, occupied);
   await putSnapshot(env, reservas);
   if (prev.length === 0) return; // first run: just seed the snapshot, no notifications
+
+  // Audit log: every freed slot noticed this cycle, regardless of the 7-day notification window.
+  // App-driven cancels are already logged (precisely) by patchSnapshot and won't reappear here,
+  // since patchSnapshot updates this same 'snapshot' baseline before the next poll runs.
+  const cancelEntries = freed.map((key): CancelLogEntry | null => {
+    const o = prevByKey.get(key);
+    if (!o) return null;
+    const [fecha, slot] = key.split('|');
+    return { fecha, slot, vivienda: o.vivienda, nombre: o.nombre, ts: now.getTime(), source: 'poll' };
+  }).filter((e): e is CancelLogEntry => e !== null);
+  await logCancellations(env, cancelEntries, now.getTime());
 
   const todayYmd = dateToYmd(now);
   const weekFreed = freed.filter((k) => { const d = k.split('|')[0]; return d >= todayYmd && d <= addDaysYmd(todayYmd, 7); });

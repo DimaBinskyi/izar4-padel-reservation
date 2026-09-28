@@ -1,11 +1,23 @@
 import { describe, it, expect } from 'vitest';
-import { diffSnapshots, slotStartPassed, weekRange, countWeekKeys, chooseGrab, isWatchExpired } from './logic';
+import { diffSnapshots, slotStartPassed, weekRange, countWeekKeys, chooseGrab, isWatchExpired, appendCancelLog, type CancelLogEntry } from './logic';
 
 describe('worker logic', () => {
   it('diffSnapshots returns freed and added keys', () => {
     const prev = ['20260628|P1-1', '20260628|P1-2'];
     const curr = ['20260628|P1-2', '20260629|P1-1'];
     expect(diffSnapshots(prev, curr)).toEqual({ freed: ['20260628|P1-1'], added: ['20260629|P1-1'] });
+  });
+
+  it('appendCancelLog merges newest-first, drops entries past the retention window, and caps the length', () => {
+    const now = 1_000_000_000_000;
+    const existing: CancelLogEntry[] = [{ fecha: '20260620', slot: 'P1-1', vivienda: 'A1', nombre: 'Old', ts: now - 91 * 24 * 60 * 60 * 1000, source: 'poll' }];
+    const fresh: CancelLogEntry = { fecha: '20260928', slot: 'P1-2', vivienda: 'B2', nombre: 'New', ts: now, source: 'app' };
+    const result = appendCancelLog(existing, [fresh], now);
+    expect(result).toEqual([fresh]); // stale entry (>90 days old) dropped
+
+    const many: CancelLogEntry[] = Array.from({ length: 600 }, (_, i) => ({ fecha: '20260928', slot: 'P1-1', vivienda: 'A1', nombre: `n${i}`, ts: now - i, source: 'poll' as const }));
+    expect(appendCancelLog([], many, now)).toHaveLength(500);
+    expect(appendCancelLog([], many, now)[0].nombre).toBe('n0'); // newest first
   });
 
   it('slotStartPassed is true only for today when start <= now', () => {

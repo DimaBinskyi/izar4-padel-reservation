@@ -112,4 +112,30 @@ describe('worker proxy', () => {
     await worker.fetch(req, env);
     expect(JSON.parse(store.get('snapshot')!)).toEqual([{ id: 6, fecha: '20260704', slot: 'P1-2', vivienda: 'B2', nombre: 'Bob' }]);
   });
+
+  it('a successful cancel appends an entry to the cancel-log (who + when)', async () => {
+    const seed = [{ id: 5, fecha: '20260703', slot: 'P1-1', vivienda: 'A1', nombre: 'Ana' }];
+    const store = new Map<string, string>([['snapshot', JSON.stringify(seed)]]);
+    const env = { ...ENV, KV: { get: async (k: string) => store.get(k) ?? null, put: async (k: string, v: string) => { store.set(k, v); } } } as any;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{"ok":true}', { status: 200, headers: { 'content-type': 'application/json' } }));
+    const body = JSON.stringify({ idReserva: 5, codigo: 'x' });
+    const req = new Request('https://app.dev/api/wp-json/app/v1/cancelar', { method: 'POST', headers: { 'x-device-secret': 's3cret', 'content-type': 'application/json' }, body });
+    await worker.fetch(req, env);
+    const log = JSON.parse(store.get('cancel-log')!);
+    expect(log).toHaveLength(1);
+    expect(log[0]).toMatchObject({ fecha: '20260703', slot: 'P1-1', vivienda: 'A1', nombre: 'Ana', source: 'app' });
+    expect(typeof log[0].ts).toBe('number');
+  });
+
+  it('/api/cancel-log returns entries filtered by fecha/slot', async () => {
+    const seeded = [
+      { fecha: '20260928', slot: 'P1-2', vivienda: 'P3-7', nombre: 'Dmytro', ts: 2, source: 'app' },
+      { fecha: '20260928', slot: 'P1-8', vivienda: 'B2', nombre: 'Bob', ts: 1, source: 'poll' },
+    ];
+    const store = new Map<string, string>([['cancel-log', JSON.stringify(seeded)]]);
+    const env = { ...ENV, KV: { get: async (k: string) => store.get(k) ?? null, put: async (k: string, v: string) => { store.set(k, v); } } } as any;
+    const req = new Request('https://app.dev/api/cancel-log?fecha=20260928&slot=P1-2', { headers: { 'x-device-secret': 's3cret' } });
+    const res = await worker.fetch(req, env);
+    expect(await res.json()).toEqual({ log: [seeded[0]] });
+  });
 });

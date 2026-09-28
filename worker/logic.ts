@@ -11,6 +11,22 @@ export function diffSnapshots(prev: string[], curr: string[]): { freed: string[]
   };
 }
 
+// Audit trail of freed/cancelled slots (who had it, when it was noticed gone) — separate from the
+// push-notification logic above, so it keeps entries the 7-day notification window would drop.
+export interface CancelLogEntry { fecha: string; slot: string; vivienda: string; nombre: string; ts: number; source: 'app' | 'poll' }
+export const CANCEL_LOG_MAX = 500;
+export const CANCEL_LOG_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
+
+// Merge new entries into the existing log, drop anything older than the retention window, newest
+// first, capped so KV doesn't grow unbounded.
+export function appendCancelLog(existing: CancelLogEntry[], entries: CancelLogEntry[], now: number): CancelLogEntry[] {
+  const cutoff = now - CANCEL_LOG_MAX_AGE_MS;
+  return [...existing, ...entries]
+    .filter((e) => e.ts >= cutoff)
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, CANCEL_LOG_MAX);
+}
+
 function ymdToParts(ymd: string) {
   return { y: +ymd.slice(0, 4), m: +ymd.slice(4, 6), d: +ymd.slice(6, 8) };
 }
