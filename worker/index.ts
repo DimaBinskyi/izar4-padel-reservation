@@ -119,6 +119,18 @@ export default {
         return json({ log: log.slice(0, limit) });
       }
 
+      // The app cancels DIRECTLY at izar4, so the client reports each successful cancel here (body = the
+      // cancelled row). Dropping it from the snapshot — the cron's diff baseline — stops the next poll
+      // from seeing our own cancel as a freed slot (→ a false "your booking was cancelled" push), and
+      // logs it precisely in the cancel-log (source: app).
+      if (url.pathname === '/api/cancelled' && req.method === 'POST') {
+        const b = (await req.json().catch(() => null)) as Partial<Resv> | null;
+        const id = Number(b?.id);
+        if (!b || !id) return json({ ok: false }, 400);
+        await recordAppCancel(env, id, b);
+        return json({ ok: true });
+      }
+
       // Client-fed snapshot: the app fetches izar4 directly (from the user's fast IP) and POSTs the
       // fresh list here so the Worker's snapshot (cron baseline + push owner-match + fast cache) stays
       // current without the Worker polling izar4 from its WAF-throttled IP. The cron still re-polls
@@ -311,15 +323,27 @@ async function patchSnapshot(env: Env, isBook: boolean, reqBody: string, resp: a
       snap = snap.filter((r) => !(r.fecha === fecha && r.slot === slot));
       snap.push({ id: Number(resp.id ?? 0), fecha, slot, vivienda: String(b.vivienda ?? '').toUpperCase(), nombre: String(b.nombre ?? '') });
     } else {
+      // (Not logged here: the client reports every cancel — direct or via this proxy — to /api/cancelled.)
       const idReserva = Number(b.idReserva);
-      const cancelled = snap.find((r) => r.id === idReserva);
       snap = snap.filter((r) => r.id !== idReserva);
-      if (cancelled) {
-        const now = Date.now();
-        await logCancellations(env, [{ fecha: cancelled.fecha, slot: cancelled.slot, vivienda: cancelled.vivienda, nombre: cancelled.nombre, ts: now, source: 'app' }], now);
-      }
     }
     await putSnapshot(env, snap);
+  } catch { /* best-effort */ }
+}
+
+// An app cancel reported via /api/cancelled: remove it from the snapshot and log it. The snapshot row
+// is the authoritative owner; the client's copy covers a row that's already gone (the proxy fallback
+// patched it out, or a client feed landed first). Best-effort.
+async function recordAppCancel(env: Env, id: number, reported: Partial<Resv>): Promise<void> {
+  try {
+    const raw = await env.KV.get('snapshot');
+    const snap = raw ? (JSON.parse(raw) as Resv[]) : [];
+    const inSnap = snap.find((r) => r.id === id);
+    if (inSnap) await putSnapshot(env, snap.filter((r) => r.id !== id));
+    const row = inSnap ?? reported;
+    if (!row.fecha || !row.slot) return;
+    const now = Date.now();
+    await logCancellations(env, [{ fecha: row.fecha, slot: row.slot, vivienda: row.vivienda ?? '', nombre: row.nombre ?? '', ts: now, source: 'app' }], now);
   } catch { /* best-effort */ }
 }
 
@@ -346,8 +370,8 @@ async function runPoll(env: Env, now: Date): Promise<void> {
   if (prev.length === 0) return; // first run: just seed the snapshot, no notifications
 
   // Audit log: every freed slot noticed this cycle, regardless of the 7-day notification window.
-  // App-driven cancels are already logged (precisely) by patchSnapshot and won't reappear here,
-  // since patchSnapshot updates this same 'snapshot' baseline before the next poll runs.
+  // App-driven cancels are already logged (precisely) by /api/cancelled and won't reappear here,
+  // since it removes them from this same 'snapshot' baseline before the next poll runs.
   const cancelEntries = freed.map((key): CancelLogEntry | null => {
     const o = prevByKey.get(key);
     if (!o) return null;
@@ -366,6 +390,7 @@ async function runPoll(env: Env, now: Date): Promise<void> {
   // Dedup by push-subscription endpoint: a re-subscribe (e.g. after the baked device-secret changed)
   // can leave two device records for the SAME physical device, which would double every push.
   const seenEndpoints = new Set<string>();
+  const autoCancelled: Resv[] = [];   // old bookings cancelled by overwrite swaps this cycle
 
   for (const k of list.keys) {
     const rec = JSON.parse((await env.KV.get(k.name))!) as DeviceRecord;
@@ -405,6 +430,7 @@ async function runPoll(env: Env, now: Date): Promise<void> {
             if (b.slot === slot) continue;
             if (!old) old = b;
             const done = await cancelReservation(b.id, rec.profile.codigo);
+            if (done) autoCancelled.push(b);
             if (b === old) oldCancelled = done;
           }
         }
@@ -450,6 +476,14 @@ async function runPoll(env: Env, now: Date): Promise<void> {
       await env.KV.put(`grabbed:${deviceId}`, JSON.stringify([...existing, ...grabbedOut]));
     }
     if (changed) await env.KV.put(k.name, JSON.stringify(rec));
+  }
+
+  // The baseline above was written before the overwrite swaps cancelled those old bookings. Drop them
+  // now, or the next poll would see them as freed and push a false "your booking was cancelled".
+  if (autoCancelled.length) {
+    const ids = new Set(autoCancelled.map((r) => r.id));
+    await putSnapshot(env, reservas.filter((r) => !ids.has(r.id)));
+    await logCancellations(env, autoCancelled.map((r) => ({ fecha: r.fecha, slot: r.slot, vivienda: r.vivienda, nombre: r.nombre, ts: now.getTime(), source: 'auto' as const })), now.getTime());
   }
 }
 

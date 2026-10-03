@@ -30,7 +30,7 @@ export async function pullGrabbed(): Promise<number> {
         // Worker couldn't cancel (profile code didn't match) → finish it with the code we saved for that booking.
         const code = await getBookingCode(g.fecha, g.oldSlot);
         if (code) {
-          const res = await cancelReservation(getDeviceSecret(), g.oldId, code);
+          const res = await cancelReservation(getDeviceSecret(), g.oldId, code, { fecha: g.fecha, slot: g.oldSlot });
           if (res.ok) await markCancelled(g.fecha, g.oldSlot, Date.now());
         }
       }

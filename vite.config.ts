@@ -1,8 +1,28 @@
+import fs from 'node:fs';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// Vite dotenv-EXPANDS .env values, so a `$…` inside VITE_DEVICE_SECRET is read as a variable
+// reference and silently dropped → the bundle bakes a truncated secret and every /api call 401s
+// (My bookings fails to load, push registration never reaches the Worker). Read it LITERALLY from
+// .env instead; an inline process-env value (which Vite doesn't expand) still wins.
+function literalEnv(key: string): string | undefined {
+  if (process.env[key]) return process.env[key];
+  try {
+    for (const line of fs.readFileSync('.env', 'utf8').split(/\r?\n/)) {
+      const i = line.indexOf('=');
+      if (i <= 0 || line.trim().startsWith('#') || line.slice(0, i).trim() !== key) continue;
+      const v = line.slice(i + 1).trim();
+      return /^(["']).*\1$/.test(v) ? v.slice(1, -1) : v;
+    }
+  } catch { /* no .env */ }
+  return undefined;
+}
+const deviceSecret = literalEnv('VITE_DEVICE_SECRET');
+
 export default defineConfig({
+  define: deviceSecret ? { 'import.meta.env.VITE_DEVICE_SECRET': JSON.stringify(deviceSecret) } : {},
   plugins: [
     react(),
     VitePWA({

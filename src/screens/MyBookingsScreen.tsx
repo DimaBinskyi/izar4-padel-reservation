@@ -95,7 +95,7 @@ export function MyBookingsScreen({ profile, onOpenSlot }: { profile: Profile; on
   }
 
   async function doCancel(res: Reservation, codigo: string): Promise<boolean> {
-    const r = await cancelReservation(secret, res.id, codigo);
+    const r = await cancelReservation(secret, res.id, codigo, res);
     if (!r.ok) return false;
     await markCancelled(res.fecha, res.slot, Date.now());
     addRecentAction(res.fecha, res.slot);

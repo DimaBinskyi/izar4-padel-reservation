@@ -53,6 +53,7 @@ worker/      Cloudflare Worker — KV + Cron + Web Push (VAPID)      (added duri
 
 ## izar4 gotchas (see docs/API.md §4)
 - **izar4 sends permissive CORS** (reflects our origin, allows GET/POST + preflight) — verified live in-browser. So the client calls izar4 **directly** (`IZAR4_BASE`/`IZAR4_APP_BASE` in `config.ts`); the Worker proxy (`API_BASE`) is only a **fallback** when a direct call network-fails. (The old "direct fails CORS" assumption was wrong.)
+- **Own cancels are reported:** the client cancels direct at izar4, then POSTs the row to `/api/cancelled` so the Worker drops it from the cron's diff baseline (else the next poll treats it as freed and pushes a false "your booking was cancelled") and logs it (`source: app`) in `GET /api/cancel-log`. `poll` entries' `ts` = when the cron *noticed* the slot gone, not the exact cancel time.
 - **Never blank the snapshot from a client feed:** `POST /api/snapshot` ignores empty arrays (real count is never 0) so a client glitch / failed direct fetch can't zero it out.
 - **Read-after-write lag:** after `reservar`, the list may not show the new row immediately. Use
   cache-busting + optimistic UI + reconcile on next poll.
@@ -84,7 +85,7 @@ VAPID keypair (public in PWA, private as a Worker secret). Deployed via `wrangle
 
 ## Cloudflare / deploy gotchas
 - `wrangler deploy` does NOT build — run `npm run build` first (it uploads `dist/` + the worker).
-- The client bakes `VITE_VAPID_PUBLIC` + `VITE_DEVICE_SECRET` at build time; redeploy with both set, and `VITE_DEVICE_SECRET` MUST equal the Worker `DEVICE_SECRET` secret or the PWA gets 401 / no push. Deploy: `VITE_VAPID_PUBLIC=… VITE_DEVICE_SECRET=… npm run build && npm run worker:deploy`.
+- The client bakes `VITE_DEVICE_SECRET` at build time; it MUST equal the Worker `DEVICE_SECRET` secret or every `/api` call 401s (My bookings fails, push registration/recentActions never reach the Worker). The secret contains `$`, and Vite **dotenv-expands** `.env` (`$8dC…` → empty → truncated secret), so `vite.config.ts` reads it from `.env` **literally**. A plain `npm run build && npm run worker:deploy` is correct; after building, check that `dist/assets/index-*.js` contains the full secret (boolean check, never print it).
 - A new `*.workers.dev` subdomain needs a one-time interactive registration (user runs `wrangler deploy`) and its TLS cert takes a few min (`ERR_SSL_VERSION_OR_CIPHER_MISMATCH` / curl exit 35 until ready).
 - **KV is eventually-consistent** — never rely on read-after-write; the client uses `src/lib/overrides.ts` (optimistic, self-healing) so counter/slots are correct immediately after a book/cancel.
 - Live: https://izar4-padel.dimabinskyi.workers.dev (Worker `izar4-padel`).

@@ -113,18 +113,33 @@ describe('worker proxy', () => {
     expect(JSON.parse(store.get('snapshot')!)).toEqual([{ id: 6, fecha: '20260704', slot: 'P1-2', vivienda: 'B2', nombre: 'Bob' }]);
   });
 
-  it('a successful cancel appends an entry to the cancel-log (who + when)', async () => {
-    const seed = [{ id: 5, fecha: '20260703', slot: 'P1-1', vivienda: 'A1', nombre: 'Ana' }];
+  it('/api/cancelled (client-reported cancel) removes it from the snapshot and logs who + when', async () => {
+    const seed = [{ id: 5, fecha: '20260703', slot: 'P1-1', vivienda: 'A1', nombre: 'Ana' }, { id: 6, fecha: '20260704', slot: 'P1-2', vivienda: 'B2', nombre: 'Bob' }];
     const store = new Map<string, string>([['snapshot', JSON.stringify(seed)]]);
     const env = { ...ENV, KV: { get: async (k: string) => store.get(k) ?? null, put: async (k: string, v: string) => { store.set(k, v); } } } as any;
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{"ok":true}', { status: 200, headers: { 'content-type': 'application/json' } }));
-    const body = JSON.stringify({ idReserva: 5, codigo: 'x' });
-    const req = new Request('https://app.dev/api/wp-json/app/v1/cancelar', { method: 'POST', headers: { 'x-device-secret': 's3cret', 'content-type': 'application/json' }, body });
-    await worker.fetch(req, env);
+    const req = new Request('https://app.dev/api/cancelled', { method: 'POST', headers: { 'x-device-secret': 's3cret', 'content-type': 'application/json' }, body: JSON.stringify({ id: 5 }) });
+    const res = await worker.fetch(req, env);
+    expect(await res.json()).toEqual({ ok: true });
+    // gone from the cron's baseline → the next poll won't push "your booking was cancelled" for it
+    expect(JSON.parse(store.get('snapshot')!)).toEqual([seed[1]]);
     const log = JSON.parse(store.get('cancel-log')!);
     expect(log).toHaveLength(1);
     expect(log[0]).toMatchObject({ fecha: '20260703', slot: 'P1-1', vivienda: 'A1', nombre: 'Ana', source: 'app' });
     expect(typeof log[0].ts).toBe('number');
+  });
+
+  it('/api/cancelled logs the reported row when it is already gone from the snapshot', async () => {
+    const store = new Map<string, string>([['snapshot', JSON.stringify([{ id: 6, fecha: '20260704', slot: 'P1-2', vivienda: 'B2', nombre: 'Bob' }])]]);
+    const env = { ...ENV, KV: { get: async (k: string) => store.get(k) ?? null, put: async (k: string, v: string) => { store.set(k, v); } } } as any;
+    const body = JSON.stringify({ id: 5, fecha: '20260703', slot: 'P1-1', vivienda: 'A1', nombre: 'Ana' });
+    await worker.fetch(new Request('https://app.dev/api/cancelled', { method: 'POST', headers: { 'x-device-secret': 's3cret', 'content-type': 'application/json' }, body }), env);
+    expect(JSON.parse(store.get('cancel-log')!)[0]).toMatchObject({ fecha: '20260703', slot: 'P1-1', vivienda: 'A1', nombre: 'Ana', source: 'app' });
+  });
+
+  it('/api/cancelled rejects a body without an id', async () => {
+    const env = { ...ENV, KV: { get: async () => null, put: async () => {} } } as any;
+    const res = await worker.fetch(new Request('https://app.dev/api/cancelled', { method: 'POST', headers: { 'x-device-secret': 's3cret', 'content-type': 'application/json' }, body: '{}' }), env);
+    expect(res.status).toBe(400);
   });
 
   it('/api/cancel-log returns entries filtered by fecha/slot', async () => {

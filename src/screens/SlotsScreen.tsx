@@ -173,7 +173,7 @@ export function SlotsScreen({ focus = null, onFocusConsumed }: SlotsScreenProps 
 
   async function doCancel(slot: SlotView, codigo: string): Promise<boolean> {
     const id = slot.reservation!.id;
-    const r = await cancelReservation(secret, id, codigo);
+    const r = await cancelReservation(secret, id, codigo, slot.reservation!);
     if (!r.ok) return false;
     await markCancelled(selected, slot.franja.slot, Date.now());
     addRecentAction(selected, slot.franja.slot);

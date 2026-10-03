@@ -148,9 +148,24 @@ export async function createReservation(secret: string, input: CreateInput): Pro
   return { ok: !!d.ok, id: d.id };
 }
 
-export async function cancelReservation(secret: string, idReserva: number, codigo: string): Promise<{ ok: boolean; code?: string }> {
+// `row` = the booking being cancelled, reported to the Worker on success (see reportCancelled).
+export async function cancelReservation(secret: string, idReserva: number, codigo: string, row?: Partial<Reservation>): Promise<{ ok: boolean; code?: string }> {
   const d = (await appPost('/cancelar', { idReserva, codigo }, secret)) as { ok?: boolean; code?: string };
+  if (d.ok) await reportCancelled(secret, { ...row, id: idReserva });
   return { ok: !!d.ok, code: d.code };
+}
+
+// The cancel went DIRECT to izar4, so the Worker never saw it. Tell it, so it drops the booking from
+// its poll baseline (otherwise the next cron poll sees our own cancel as a freed slot and pushes a
+// false "your booking was cancelled") and logs it in the cancel-log. Awaited so it lands before the
+// caller's live re-read feeds the snapshot; best-effort — a failure never fails the cancel.
+async function reportCancelled(secret: string, row: Partial<Reservation> & { id: number }): Promise<void> {
+  try {
+    await fetch('/api/cancelled', {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-device-secret': secret },
+      body: JSON.stringify(row), cache: 'no-store',
+    });
+  } catch { /* best-effort */ }
 }
 
 // Used ONLY by the cancel flow to compare against the user's own profile code.
@@ -193,14 +208,20 @@ export async function fetchAllReservations(secret: string, live = false): Promis
       return { reservas, ts: Date.now() };
     } catch { return fetchSnapshot(secret, true); }    // direct failed → Worker's live fetch
   }
-  return fetchSnapshot(secret, false);                 // fast cache read
+  try {
+    return await fetchSnapshot(secret, false);         // fast cache read
+  } catch {
+    return { reservas: await fetchReservasDirect(), ts: Date.now() };   // Worker down/401 → read izar4 directly
+  }
 }
 
 // Read the Worker's KV snapshot (fast cache). Items are flat {id,fecha,slot,vivienda,nombre}.
 async function fetchSnapshot(secret: string, live: boolean): Promise<{ reservas: Reservation[]; ts: number }> {
   const r = await fetch(`/api/reservas?live=${live ? '1' : '0'}`, { headers: { 'x-device-secret': secret }, cache: 'no-store' });
+  if (!r.ok) throw new Error(`snapshot ${r.status}`);
   const ts = Number(r.headers.get('x-snapshot-ts') ?? 0);
   const data = (await r.json()) as any[];
+  if (!Array.isArray(data)) throw new Error('snapshot: not a list');
   const reservas = data
     .filter((x) => x && x.fecha && x.slot)
     .map((x) => ({ id: Number(x.id), slot: x.slot, fecha: String(x.fecha), nombre: x.nombre ?? '', vivienda: x.vivienda ?? '' }));
@@ -214,7 +235,9 @@ async function fetchReservasDirect(): Promise<Reservation[]> {
   for (let p = 1; p <= 5; p++) {
     const r = await fetch(`${IZAR4_BASE}/wp/v2/reservas?per_page=100&page=${p}&recurso=${PADEL_TERM_ID}&_fields=id,acf`, { cache: 'no-store' });
     if (r.status === 400) break;                       // past the last page
-    if (!r.ok) { if (p === 1) throw new Error('reservas direct failed'); break; }
+    // Any other failure (incl. a mid-pagination WAF 503) → throw: a partial list must never be shown
+    // or fed to the Worker as the snapshot (pages 2+ would render as free).
+    if (!r.ok) throw new Error(`reservas direct failed (page ${p})`);
     const arr = (await r.json()) as any[];
     raw.push(...arr);
     if (arr.length < 100) break;

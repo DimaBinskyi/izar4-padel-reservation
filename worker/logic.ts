@@ -13,7 +13,9 @@ export function diffSnapshots(prev: string[], curr: string[]): { freed: string[]
 
 // Audit trail of freed/cancelled slots (who had it, when it was noticed gone) — separate from the
 // push-notification logic above, so it keeps entries the 7-day notification window would drop.
-export interface CancelLogEntry { fecha: string; slot: string; vivienda: string; nombre: string; ts: number; source: 'app' | 'poll' }
+// source: 'app' = cancelled in our app (reported at cancel time), 'auto' = an overwrite swap's cancel,
+// 'poll' = noticed gone by the cron (izar4 site / other device; ts = when noticed, not when cancelled).
+export interface CancelLogEntry { fecha: string; slot: string; vivienda: string; nombre: string; ts: number; source: 'app' | 'auto' | 'poll' }
 export const CANCEL_LOG_MAX = 500;
 export const CANCEL_LOG_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 

@@ -36,6 +36,23 @@ describe('izar4Client writes', () => {
     expect(r).toEqual({ ok: false, code: 'codigo_incorrecto' });
   });
 
+  it('a successful cancel is reported to the Worker (/api/cancelled) with the cancelled row', async () => {
+    const spy = mock({ ok: true });
+    const row = { fecha: '20261008', slot: 'P1-7', vivienda: 'P3-7', nombre: 'Dmytro' };
+    expect(await cancelReservation('s', 1530, 'sol24', row)).toEqual({ ok: true, code: undefined });
+    const report = spy.mock.calls.find((c) => String(c[0]) === '/api/cancelled');
+    expect(report).toBeDefined();
+    const init = report![1] as RequestInit;
+    expect((init.headers as Record<string, string>)['x-device-secret']).toBe('s');
+    expect(JSON.parse(init.body as string)).toEqual({ ...row, id: 1530 });
+  });
+
+  it('a failed cancel is not reported to the Worker', async () => {
+    const spy = mock({ ok: false, code: 'codigo_incorrecto' });
+    await cancelReservation('s', 1530, 'nope', { fecha: '20261008', slot: 'P1-7' });
+    expect(spy.mock.calls.some((c) => String(c[0]) === '/api/cancelled')).toBe(false);
+  });
+
   it('fetchReservationCode returns the cancellation code for an id', async () => {
     mock({ id: 1530, acf: { codigo_cancelacion_reservas: 'sol24' } });
     expect(await fetchReservationCode('s', 1530)).toBe('sol24');
